@@ -121,7 +121,7 @@ static menu_t *MenuCreateOptionsGraphics(
 		MenuCreateNormal(name, "Graphics Options:", MENU_TYPE_OPTIONS, 0);
 	MenuAddConfigOptionsItem(
 		menu, ConfigGet(data->config, "Graphics.Brightness"));
-#ifndef __GCWZERO__
+#if !defined(__GCWZERO__) && !defined(CDOGS_PS2)
 #ifndef __ANDROID__
 	MenuAddConfigOptionsItem(
 		menu, ConfigGet(data->config, "Graphics.Fullscreen"));

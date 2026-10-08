@@ -92,6 +92,10 @@
 #include "mainmenu.h"
 #include "prep.h"
 
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -145,7 +149,10 @@ int main(int argc, char *argv[])
 		goto bail;
 	}
 
-#ifndef __EMSCRIPTEN__
+#ifdef CDOGS_PS2
+	CDogsPS2ApplyConfig(&gConfig);
+	const int sdlFlags = SDL_INIT_TIMER | SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
+#elif !defined(__EMSCRIPTEN__)
 	const int sdlFlags = SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO |
 						 SDL_INIT_HAPTIC | SDL_INIT_GAMECONTROLLER;
 #else
@@ -164,6 +171,9 @@ int main(int argc, char *argv[])
 		err = EXIT_FAILURE;
 		goto bail;
 	}
+#ifdef CDOGS_PS2
+	CDogsPS2AddControllerMappings();
+#endif
 	SDL_EventState(SDL_DROPFILE, SDL_DISABLE);
 
 	PicManagerInit(&gPicManager);

@@ -47,6 +47,9 @@
 	POSSIBILITY OF SUCH DAMAGE.
 */
 #include "sounds.h"
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
 
 #include <ctype.h>
 #include <math.h>
@@ -258,7 +261,12 @@ static void SoundClose(SoundDevice *s, const bool waitForSoundsComplete)
 	{
 		Uint32 waitStart = SDL_GetTicks();
 		while (Mix_Playing(-1) > 0 && SDL_GetTicks() - waitStart < 1000)
-			;
+		{
+#ifdef CDOGS_PS2
+			CDogsPS2AudioPump();
+			SDL_Delay(1);
+#endif
+		}
 		// Don't stop the music unless we're reopening
 		MusicStop(&s->music);
 	}

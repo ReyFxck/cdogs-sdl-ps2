@@ -39,6 +39,11 @@ typedef struct
 	color_t bkgMask;
 	struct vec2i logicalSize;
 	SDL_Texture *final;
+#ifdef CDOGS_PS2
+	SDL_Renderer *presenter;
+	SDL_Surface *framebuffer;
+	SDL_Texture *presentTexture;
+#endif
 } WindowContext;
 
 bool WindowContextCreate(

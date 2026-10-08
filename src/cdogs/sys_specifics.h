@@ -28,6 +28,14 @@
 */
 #pragma once
 
+// n32 double fields in by-value aggregates require double FPU registers,
+// which the R5900 lacks. Keep those game values in hardware precision.
+#ifdef CDOGS_PS2
+typedef float cdogs_real_t;
+#else
+typedef double cdogs_real_t;
+#endif
+
 #ifdef _MSC_VER
 #pragma warning(disable : 4996)
 #endif

@@ -7,6 +7,13 @@
 [![Custom campaigns](https://img.shields.io/badge/%F0%9F%94%97-custom%20campaigns-brightgreen)](http://cdogs.morezombies.net/)
 [![#CDogsSDL on Mastodon](https://img.shields.io/badge/-%23CDogsSDL-%23303030?logo=mastodon)](https://mastodon.gamedev.place/tags/CDogsSDL)
 
+## PlayStation 2 port
+
+Este fork tem um build separado para **PS2SDK/ps2dev**, somente do jogo,
+com vídeo/controle SDL2 e áudio opcional pela **RFAuds2**, sem audsrv.
+Consulte [as instruções de compilação, empacotamento e teste no PS2/PCSX2](platform/ps2/README.md).
+O primeiro milestone é o ELF sem áudio; boot no emulador/hardware ainda precisa ser validado.
+
 ## ![](https://github.com/cxong/cdogs-sdl/blob/master/graphics/column.png) Introduction
 
 C-Dogs SDL is a classic overhead run-and-gun game, supporting up to 4 players

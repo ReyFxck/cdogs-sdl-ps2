@@ -9,6 +9,13 @@ set(VERSION_MINOR "4")
 set(VERSION_PATCH "0")
 set(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
+# Keep console dependencies and flags out of the desktop build.
+option(CDOGS_PS2 "Build the PlayStation 2 game with PS2SDK" ${PS2})
+if(CDOGS_PS2)
+	include(platform/ps2/cmake/PS2.cmake)
+	return()
+endif()
+
 # Optionally configure CI files since they are excluded in source archives
 if(EXISTS ${CMAKE_SOURCE_DIR}/.github/workflows/cmake.yml.cmake)
 	configure_file(
@@ -160,8 +167,9 @@ if(WIN32)
 	configure_file(${CMAKE_SOURCE_DIR}/build/windows/cdogs.rc.cmake ${CMAKE_SOURCE_DIR}/build/windows/cdogs.rc)
 	set_source_files_properties(${CMAKE_SOURCE_DIR}/build/windows/cdogs.rc PROPERTIES GENERATED TRUE)
 endif()
-configure_file(${CMAKE_SOURCE_DIR}/src/cdogs/sys_config.h.cmake ${CMAKE_SOURCE_DIR}/src/cdogs/sys_config.h)
-set_source_files_properties(${CMAKE_SOURCE_DIR}/src/cdogs/sys_config.h PROPERTIES GENERATED TRUE)
+set(CDOGS_CONFIG_HEADER "${CMAKE_BINARY_DIR}/generated/cdogs/sys_config.h")
+configure_file(${CMAKE_SOURCE_DIR}/src/cdogs/sys_config.h.cmake ${CDOGS_CONFIG_HEADER})
+include_directories(BEFORE "${CMAKE_BINARY_DIR}/generated" "${CMAKE_BINARY_DIR}/generated/cdogs")
 include_directories(src src/cdogs)
 
 # Tests

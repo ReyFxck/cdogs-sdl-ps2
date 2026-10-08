@@ -50,6 +50,9 @@
 #define _DEFAULT_SOURCE
 
 #include "utils.h"
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
 
 #include <assert.h>
 #include <errno.h>
@@ -148,6 +151,10 @@ static void TrimSlashes(char *s);
 static bool IsAbsolutePath(const char *path);
 void RealPath(const char *src, char *dest)
 {
+#ifdef CDOGS_PS2
+	CDogsPS2ResolvePath(src, dest);
+	return;
+#endif
 	char *res;
 #ifndef _WIN32
 	// realpath will fail if the file does not exist; if this is the
@@ -391,6 +398,10 @@ void RelPathFromCWD(char *buf, const char *to)
 
 void GetDataFilePath(char *buf, const char *path)
 {
+#ifdef CDOGS_PS2
+	CDogsPS2DataPath(path, buf);
+	return;
+#endif
 	if (IsAbsolutePath(path))
 	{
 		strcpy(buf, path);
@@ -417,7 +428,9 @@ void GetDataFilePath(char *buf, const char *path)
 
 static bool IsAbsolutePath(const char *path)
 {
-#ifdef _WIN32
+#ifdef CDOGS_PS2
+	return CDogsPS2IsAbsolutePath(path);
+#elif defined(_WIN32)
 	return strlen(path) > 1 && path[1] == ':';
 #else
 	return path[0] == '/';

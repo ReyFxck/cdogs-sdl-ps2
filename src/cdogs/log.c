@@ -29,7 +29,11 @@
 #include <stdarg.h>
 #include <time.h>
 
+#ifdef CDOGS_PS2
+#include "ps2_log_colors.h"
+#else
 #include "rlutil/rlutil.h"
+#endif
 #include "utils.h"
 
 FILE *gLogFile;

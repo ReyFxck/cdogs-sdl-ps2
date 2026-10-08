@@ -44,9 +44,15 @@ void PrintTitle(void)
 	printf(
 		"SDL version %d.%d.%d\n", SDL_MAJOR_VERSION, SDL_MINOR_VERSION,
 		SDL_PATCHLEVEL);
+#ifdef CDOGS_PS2_RFAUDS2
+	printf("PS2 audio: RFAuds2 PCM frontend\n");
+#elif defined(CDOGS_PS2)
+	printf("PS2 audio: disabled\n");
+#else
 	printf(
 		"SDL_mixer version %d.%d.%d\n", SDL_MIXER_MAJOR_VERSION,
 		SDL_MIXER_MINOR_VERSION, SDL_MIXER_PATCHLEVEL);
+#endif
 }
 
 void PrintHelp(void)

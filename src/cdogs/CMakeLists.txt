@@ -217,7 +217,7 @@ set(CDOGS_HEADERS
 	quick_play.h
 	screen_shake.h
 	sounds.h
-	sys_config.h
+	${CDOGS_CONFIG_HEADER}
 	sys_specifics.h
 	texture.h
 	thing.h
@@ -233,7 +233,7 @@ set(CDOGS_HEADERS
 	XGetopt.h
 	yajl_utils.h)
 
-if(NOT USE_SHARED_ENET)
+if(NOT USE_SHARED_ENET AND NOT CDOGS_PS2)
     add_subdirectory(enet)
 endif()
 
@@ -241,6 +241,13 @@ add_subdirectory(c_hashmap)
 add_subdirectory(cwolfmap)
 add_subdirectory(SDL_JoystickButtonNames)
 add_subdirectory(yajl)
+
+if(CDOGS_PS2)
+	list(REMOVE_ITEM CDOGS_SOURCES net_client.c net_server.c window_context.c)
+	list(APPEND CDOGS_SOURCES
+		${PROJECT_SOURCE_DIR}/platform/ps2/offline.c
+		${PROJECT_SOURCE_DIR}/platform/ps2/window_context.c)
+endif()
 
 add_library(cdogs STATIC
 	${CDOGS_SOURCES} ${CDOGS_HEADERS})
@@ -252,5 +259,9 @@ target_link_libraries(cdogs
 	SDL_joystickbuttonnames
 	yajl_s
 	SDL2::SDL2
-	SDL2_mixer::SDL2_mixer
 	${ENet_LIBRARIES})
+if(CDOGS_PS2)
+	target_link_libraries(cdogs cdogs_ps2_audio)
+else()
+	target_link_libraries(cdogs SDL2_mixer::SDL2_mixer)
+endif()

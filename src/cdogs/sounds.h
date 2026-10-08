@@ -66,7 +66,11 @@
 #include "utils.h"
 #include "vector.h"
 
+#ifdef CDOGS_PS2
+#define CDOGS_SND_RATE 48000
+#else
 #define CDOGS_SND_RATE 44100
+#endif
 #define CDOGS_SND_FMT AUDIO_S16SYS
 #define CDOGS_SND_CHANNELS 2
 

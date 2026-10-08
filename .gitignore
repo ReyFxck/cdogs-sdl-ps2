@@ -113,3 +113,11 @@ Thumbs.db
 .config/
 *.blend1
 emscripten/
+
+# PS2 build trees, dependencies and staged runtime assets
+out/
+.ps2dev/
+.ps2deps/
+!platform/ps2/include/
+*.elf
+*.map

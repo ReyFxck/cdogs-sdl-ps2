@@ -64,6 +64,10 @@
 #include "sys_specifics.h"
 #include "utils.h"
 
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
+
 #define MAX_STRING_LEN 1000
 
 #define CAMPAIGN_MAGIC 690304
@@ -566,6 +570,9 @@ bail:
 char *cdogs_homepath = NULL;
 const char *GetHomeDirectory(void)
 {
+#ifdef CDOGS_PS2
+	return CDogsPS2DataRoot();
+#endif
 #ifdef __EMSCRIPTEN__
 	return "/persistent_data/";
 #endif
@@ -616,6 +623,9 @@ const char *GetHomeDirectory(void)
 char cfpath[CDOGS_PATH_MAX];
 const char *GetConfigFilePath(const char *name)
 {
+#ifdef CDOGS_PS2
+	return CDogsPS2ConfigPath(name);
+#endif
 	const char *xdgConfigDir = getenv("XDG_CONFIG_HOME");
 	if (xdgConfigDir != NULL)
 	{
@@ -654,6 +664,10 @@ bool mkdir_deep(const char *path)
 			break;
 		if (path[i] == '/')
 		{
+#ifdef CDOGS_PS2
+			// A device prefix is already mounted; it is not a directory to create.
+			if (i > 0 && path[i - 1] == ':') continue;
+#endif
 			char buf[CDOGS_PATH_MAX];
 			strncpy(buf, path, i + 1);
 			buf[i + 1] = '\0';

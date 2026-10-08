@@ -41,9 +41,9 @@ typedef struct
 	int ActorUID;
 	struct vec2 Pos;
 	float Z;
-	double Angle;
+	cdogs_real_t Angle;
 	float DZ;
-	double Spin;
+	cdogs_real_t Spin;
 	int Count;
 	int Range;
 	Thing thing;
@@ -59,9 +59,9 @@ typedef struct
 	struct vec2 Pos;
 	float Z;
 	struct vec2 Vel;
-	double Angle;
+	cdogs_real_t Angle;
 	float DZ;
-	double Spin;
+	cdogs_real_t Spin;
 	struct vec2 DrawScale;
 	color_t Mask;
 	char Text[128];

@@ -97,7 +97,7 @@ color_t ColorAlphaBlend(color_t a, color_t b);
 
 typedef struct
 {
-	double h, s, v;
+	cdogs_real_t h, s, v;
 } HSV;
 extern HSV tintNone;
 extern HSV tintRed;

@@ -27,6 +27,9 @@
 	POSSIBILITY OF SUCH DAMAGE.
 */
 #include "game_loop.h"
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
 
 #include <SDL_timer.h>
 
@@ -190,6 +193,9 @@ static bool LoopRunParamsShouldSleep(LoopRunParams *p);
 static bool LoopRunParamsShouldSkip(LoopRunParams *p);
 bool LoopRunnerRunInner(LoopRunInnerData *ctx)
 {
+#ifdef CDOGS_PS2
+	CDogsPS2AudioPump();
+#endif
 #ifndef __EMSCRIPTEN__
 	// Frame rate control
 	if (LoopRunParamsShouldSleep(&(ctx->p)))
