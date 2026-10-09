@@ -20,7 +20,9 @@ e o jogo encerrou, retornando à BIOS. Esta revisão libera as imagens temporár
 e adiciona diagnóstico do heap EE. A v4 exibiu as telas de carregamento, mas
 travou ao gerar a batalha de fundo do menu depois de falhas de leitura CDFS.
 Esta revisão corrige limites/enumeração do driver, elimina pixels duplicados
-na composição software e usa um menu estático no PS2; ainda requer teste no console.
+na composição software. A v5 usou um fundo estático como precaução; esta revisão
+restaura a batalha animada original do menu no PS2, mantendo as correções de RAM
+e filesystem. O menu ainda requer confirmação no console.
 
 ## Build reproduzível no Linux
 
@@ -236,9 +238,10 @@ alocação limitada a 16 MiB. O pico caiu de 22.955.672 para aproximadamente
 13,3 MB; após encerramento da SDL/TLS, as alocações rastreadas retornam a zero.
 Isso não representa o heap total do PS2: IOP, outras estruturas e campanhas
 podem mudar o consumo. O ELF escreve `PS2: heap video ready`, `graphics loaded`,
-`main menu` e `menu ready`, além das contagens de armas/ammo/personagens.
-O menu PS2 não gera a batalha animada ao fundo, poupando RAM/CPU; o desktop
-conserva o fundo original. Dados obrigatórios ausentes geram uma mensagem e
+`main menu`, `menu background start`, `menu background ready` e `menu ready`,
+além das contagens de armas/ammo/personagens. A batalha animada do menu está
+habilitada no PS2, com geração, atualização e desenho iguais ao upstream.
+Dados obrigatórios ausentes geram uma mensagem e
 saída controlada, em vez de entrar na geração aleatória com arrays vazios.
 **O menu desta revisão ainda precisa de confirmação no emulador.** Não se
 comprova desempenho, controle em gameplay ou SPU2.
@@ -330,7 +333,7 @@ com música em memória.
 | PNGs temporários retidos esgotam a RAM durante a carga | liberação após cópia, regressão de carga/recarga em 24 MiB e diagnóstico do heap EE |
 | CDFS limita enumeração a 256 entradas e quatro diretórios físicos | módulo local com 512 entradas, snapshots EE e regressão com o parser real |
 | Cópia de pixels em Pic.Data e textura SDL consome RAM | buffer compartilhado apenas no compositor software fixado, regressão em 16 MiB |
-| Menu gera combate mesmo com assets incompletos | validação de dados obrigatórios e fundo estático só no PS2 |
+| Menu gera combate mesmo com assets incompletos | validação de dados obrigatórios antes do menu, preservando a batalha animada |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |
 | SDL_mixer/formatos incompatíveis com PCM | frontend silencioso ou RFAuds2 + conversão offline |
