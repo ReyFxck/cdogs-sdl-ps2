@@ -707,5 +707,12 @@ end:
 
 SDL_Surface *LoadImgToSurface(const char *path)
 {
-	return STBIMG_Load(path);
+	SDL_Surface *image = STBIMG_Load(path);
+#ifdef CDOGS_PS2
+	if (image == NULL)
+	{
+		fprintf(stderr, "PS2: image '%s': %s\n", path, SDL_GetError());
+	}
+#endif
+	return image;
 }

@@ -194,6 +194,15 @@ int main(int argc, char *argv[])
 		goto bail;
 	}
 	FontLoadFromJSON(&gFont, "graphics/font.png", "graphics/font.json");
+#ifdef CDOGS_PS2
+	// A missing font must not reach the loading screen with null glyphs.
+	if (gFont.Chars.size == 0)
+	{
+		LOG(LM_MAIN, LL_ERROR, "PS2: required font failed: %s", SDL_GetError());
+		err = EXIT_FAILURE;
+		goto bail;
+	}
+#endif
 	LoadingScreenInit(&gLoadingScreen, &gGraphicsDevice);
 	LoadingScreenDraw(&gLoadingScreen, "Loading graphics...", 0.0f);
 	PicManagerLoad(&gPicManager);

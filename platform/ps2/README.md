@@ -11,8 +11,9 @@ Há duas variantes:
 | `OFF` (padrão) | desativada | pacote menor, sem arquivos de áudio |
 | `RFAUDS2` | PCM estéreo S16, 48 kHz, RFAuds2 no EE/IOP | conversão no PC com FFmpeg |
 
-**Os dois ELFs foram compilados com PS2SDK. O boot até o menu no PCSX2 e o
-funcionamento do SPU2 em hardware ainda não foram confirmados.** Não há BIOS
+**Os dois ELFs foram compilados com PS2SDK. Um teste no NetherSX2 confirmou
+boot da ISO, acesso CDFS, início de vídeo/PAD e criação de configuração no
+memory card, mas o menu e o SPU2 ainda não foram confirmados.** Não há BIOS
 nem emulador no ambiente em que este port foi preparado.
 
 ## Build reproduzível no Linux
@@ -167,8 +168,17 @@ com `assets missing` antes do vídeo: `argv[0]` era um URI Android
 nomes opacos do loader, não caminhos que o jogo ou a libc do PS2 possam abrir.
 O port agora evita normalizá-los como caminhos POSIX e procura o disco CDFS.
 A ISO também elimina a necessidade de manter `data/` e `graphics/` externas.
-**A imagem foi construída e validada, mas o boot no seu emulador ainda precisa
-ser confirmado.** Esta correção não comprova desempenho, controle ou SPU2.
+Um teste posterior confirmou boot do ELF pelo `SYSTEM.CNF`, acesso `cdfs:/`,
+início do vídeo e criação de `mc0:/CDOGS/`, mas a SDL recusou imagens porque
+seu `SDL_RWFromFile` exige `fstat` com tipo POSIX regular/FIFO. O `getstat`
+legado do CDFS não fornecia esse tipo. O port agora adapta **só leituras CDFS**:
+abre com `fopen` e cria o stream com `SDL_RWFromFP`, mantendo leitura, seek e
+fechamento SDL e sem alterar o SDK/SDL. Os demais dispositivos mantêm suas
+checagens normais. A falha foi reproduzida com a SDL nativa real em um teste
+que injeta o mode inválido; o adaptador decodificou os pixels da fonte.
+O PS2 também encerra com diagnóstico se a fonte obrigatória não carregar,
+em vez de tentar desenhar glifos nulos. **O menu desta revisão ainda precisa
+de confirmação no emulador.** Não se comprova desempenho, controle ou SPU2.
 
 ### ELF com HostFS no PC ou USB
 
@@ -250,6 +260,7 @@ com música em memória.
 | Caminhos POSIX/storefront no console | raízes por dispositivo e shim de descoberta Steam |
 | URI Android SAF em `argv[0]`/cwd e HostFS recusado | não tratar URI como caminho; imagem ISO com assets via CDFS |
 | `getstat` legado CDFS classifica arquivos incorretamente | leitura real para raiz e tipo `dread` no wrapper tinydir PS2 |
+| SDL rejeita PNG CDFS no filtro `fstat` de `SDL_RWFromFile` | wrapper read-only CDFS via `fopen` + `SDL_RWFromFP`, regressão com SDL real |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |
 | SDL_mixer/formatos incompatíveis com PCM | frontend silencioso ou RFAuds2 + conversão offline |

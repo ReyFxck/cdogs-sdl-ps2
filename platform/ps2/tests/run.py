@@ -51,6 +51,10 @@ def main():
                         *libs, "-lm", "-o", str(temp / "platform-test")], check=True)
         env = os.environ.copy(); env["SDL_VIDEODRIVER"] = "dummy"
         subprocess.run([str(temp / "platform-test")], cwd=ROOT, env=env, check=True)
+        subprocess.run([*common, str(PS2 / "tests/rwops_test.c"), str(PS2 / "rwops.c"),
+                        "-Wl,--gc-sections", "-Wl,--wrap=SDL_RWFromFile", "-Wl,--export-dynamic",
+                        *libs, "-ldl", "-lm", "-o", str(temp / "rwops-test")], check=True)
+        subprocess.run([str(temp / "rwops-test"), str(ROOT / "graphics/font.png")], check=True)
         pcm(temp / "music.ogg.pcm", 2107)
         pcm(temp / "wrong-rate.wav", 10, 44100)
         pcm(temp / "truncated.wav", 10)

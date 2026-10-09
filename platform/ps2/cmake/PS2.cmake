@@ -41,7 +41,7 @@ endif()
 
 add_subdirectory(src)
 target_sources(cdogs-sdl PRIVATE platform/ps2/main.c platform/ps2/platform.c
-  platform/ps2/posix_paths.c)
+  platform/ps2/posix_paths.c platform/ps2/rwops.c)
 set_source_files_properties("${PROJECT_SOURCE_DIR}/src/cdogs.c"
   TARGET_DIRECTORY cdogs-sdl PROPERTIES COMPILE_DEFINITIONS "main=CDogsMain")
 target_link_libraries(cdogs-sdl SDL2::SDL2main)
@@ -50,6 +50,7 @@ set_target_properties(cdogs-sdl PROPERTIES SUFFIX ".elf"
   RUNTIME_OUTPUT_DIRECTORY_RELEASE "${PROJECT_BINARY_DIR}"
   RUNTIME_OUTPUT_DIRECTORY_DEBUG "${PROJECT_BINARY_DIR}")
 target_link_options(cdogs-sdl PRIVATE "-Wl,-Map,${PROJECT_BINARY_DIR}/cdogs-sdl.map")
+target_link_options(cdogs-sdl PRIVATE "-Wl,--wrap=SDL_RWFromFile")
 # tinydir and JSON loading use large local buffers, including recursive loads.
 target_link_options(cdogs-sdl PRIVATE "-Wl,--defsym,_stack_size=1048576")
 install(TARGETS cdogs-sdl RUNTIME DESTINATION .)
