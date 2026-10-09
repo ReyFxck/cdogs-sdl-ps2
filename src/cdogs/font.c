@@ -63,6 +63,7 @@ void FontLoad(
 	{
 		perror("Cannot load non-32-bit image");
 		LOG(LM_GFX, LL_ERROR, "Only 32-bit depth images supported");
+		SDL_FreeSurface(image);
 		return;
 	}
 
@@ -80,6 +81,7 @@ void FontLoad(
 			image->w, image->h, f->Size.x, f->Size.y, f->Stride,
 			f->Padding.Left, f->Padding.Top, f->Padding.Right,
 			f->Padding.Bottom);
+		SDL_FreeSurface(image);
 		return;
 	}
 
@@ -112,6 +114,7 @@ void FontLoad(
 		}
 	}
 	SDL_UnlockSurface(image);
+	SDL_FreeSurface(image);
 }
 void FontTerminate(Font *f)
 {

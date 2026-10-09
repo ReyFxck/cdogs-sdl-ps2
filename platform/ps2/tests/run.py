@@ -55,6 +55,19 @@ def main():
                         "-Wl,--gc-sections", "-Wl,--wrap=SDL_RWFromFile", "-Wl,--export-dynamic",
                         *libs, "-ldl", "-lm", "-o", str(temp / "rwops-test")], check=True)
         subprocess.run([str(temp / "rwops-test"), str(ROOT / "graphics/font.png")], check=True)
+        graphics_sources = [PS2 / "tests/graphics_memory_test.c", PS2 / "platform.c",
+                            *[ROOT / "src/cdogs" / name for name in
+                              ("pic.c", "pic_manager.c", "font.c", "utils.c", "cpic.c", "blit.c",
+                               "c_array.c", "color.c", "vector.c", "texture.c",
+                               "c_hashmap/hashmap.c", "mathc/mathc.c")]]
+        subprocess.run([*common, "-I" + str(ROOT / "src/proto/nanopb"),
+                        *map(str, graphics_sources), "-Wl,--gc-sections",
+                        "-Wl,--wrap=malloc", "-Wl,--wrap=calloc", "-Wl,--wrap=realloc",
+                        "-Wl,--wrap=free", "-Wl,--wrap=LoadImgToSurface",
+                        *libs, "-lm", "-o", str(temp / "graphics-memory-test")], check=True)
+        png_count = sum(1 for p in (ROOT / "graphics").rglob("*") if p.suffix.lower() == ".png")
+        subprocess.run([str(temp / "graphics-memory-test"), str(ROOT), str(png_count)],
+                       cwd=ROOT, env=env, check=True)
         pcm(temp / "music.ogg.pcm", 2107)
         pcm(temp / "wrong-rate.wav", 10, 44100)
         pcm(temp / "truncated.wav", 10)

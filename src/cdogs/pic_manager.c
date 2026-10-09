@@ -224,6 +224,8 @@ void PicManagerLoadDir(
 					PathGetBasenameWithoutExtension(buf, file.name);
 				}
 				PicManagerAdd(pics, sprites, buf, data, isHD);
+				// PicLoad owns a copy of the pixels, not the decoded PNG.
+				SDL_FreeSurface(data);
 			}
 		}
 		else if (file.is_dir && file.name[0] != '.')
@@ -466,8 +468,8 @@ static void PicManagerUnload(PicManager *pm)
 }
 static void StyleNamesDestroy(CArray *a)
 {
-	CA_FOREACH(char, n, *a)
-	CFREE(n);
+	CA_FOREACH(char *, n, *a)
+	CFREE(*n);
 	CA_FOREACH_END()
 	CArrayTerminate(a);
 }
@@ -483,6 +485,10 @@ void PicManagerTerminate(PicManager *pm)
 	StyleNamesDestroy(&pm->exitStyleNames);
 	StyleNamesDestroy(&pm->doorStyleNames);
 	StyleNamesDestroy(&pm->keyStyleNames);
+	hashmap_free(pm->pics);
+	hashmap_free(pm->sprites);
+	hashmap_free(pm->customPics);
+	hashmap_free(pm->customSprites);
 }
 static void NamedPicDestroy(any_t data)
 {

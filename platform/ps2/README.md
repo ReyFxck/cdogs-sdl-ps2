@@ -15,6 +15,9 @@ Há duas variantes:
 boot da ISO, acesso CDFS, início de vídeo/PAD e criação de configuração no
 memory card, mas o menu e o SPU2 ainda não foram confirmados.** Não há BIOS
 nem emulador no ambiente em que este port foi preparado.
+O teste da v3 passou a abrir os PNGs, mas esgotou a RAM durante a carga gráfica
+e o jogo encerrou, retornando à BIOS. Esta revisão libera as imagens temporárias
+e adiciona diagnóstico do heap EE; ainda requer confirmação do menu no console.
 
 ## Build reproduzível no Linux
 
@@ -177,8 +180,27 @@ fechamento SDL e sem alterar o SDK/SDL. Os demais dispositivos mantêm suas
 checagens normais. A falha foi reproduzida com a SDL nativa real em um teste
 que injeta o mode inválido; o adaptador decodificou os pixels da fonte.
 O PS2 também encerra com diagnóstico se a fonte obrigatória não carregar,
-em vez de tentar desenhar glifos nulos. **O menu desta revisão ainda precisa
-de confirmação no emulador.** Não se comprova desempenho, controle ou SPU2.
+em vez de tentar desenhar glifos nulos.
+
+O próximo log (v3) confirmou a leitura da fonte e dos PNGs, mas registrou
+`outofmem!` durante a carga gráfica, falhas de alocação de controle/JSON e saída
+para `rom0:OSDSYS`. A tela vermelha nesse caso apareceu **depois** que o jogo
+encerrou; não foi falha de reconhecimento da ISO. O loader mantinha cada PNG
+decodificado após copiar seus pixels para sprites/texturas, acumulando cerca de
+9,7 MB. Agora libera essa superfície temporária e a imagem da fonte. O teste de
+carga repetida também revelou e corrigiu ownership das listas de estilos, dos
+mapas gráficos e das chaves antigas no rehash. São correções de liberação de
+memória, sem mudar os assets, o renderer ou as opções desktop.
+
+O teste nativo carrega os 1.695 PNGs, 5.672 sprites e a fonte três vezes com
+alocação limitada a 24 MiB para o loader e SDL real. O pico verificado foi de
+22.955.672 bytes; após encerramento da SDL e do seu TLS, as alocações rastreadas
+retornaram a zero. Isso não representa uma medição do PS2: ponteiros, allocator,
+IOP, outras estruturas e campanhas podem mudar o consumo. O novo ELF escreve
+`PS2: heap video ready`, `graphics loaded` e `main menu`, com bytes usados/livres
+do heap real do EE, para diagnosticar o próximo teste sem confundir uma saída
+do jogo com um disco inválido. **O menu desta revisão ainda precisa de
+confirmação no emulador.** Não se comprova desempenho, controle ou SPU2.
 
 ### ELF com HostFS no PC ou USB
 
@@ -218,7 +240,8 @@ Vídeo: composição software SDL em 320×240, seguida de upload de um framebuff
 para o renderer PS2/gsKit. O driver acelerado PS2 não implementa o render target
 usado pelo jogo; essa composição conserva o pipeline original sem renderer
 nativo novo. O tamanho fica fixo e as opções gráficas desktop são ocultadas.
-O consumo dinâmico de texturas/campanhas ainda deve ser medido nos 32 MiB do EE.
+O loader agora libera PNGs temporários; o consumo dinâmico de texturas/campanhas
+ainda deve ser medido nos 32 MiB do EE pelas linhas de diagnóstico do heap.
 
 Controle: mapeamento explícito do PAD da SDL para SDL_GameController, usando o
 GUID real do dispositivo. Cruz confirma/A, círculo volta/B, quadrado X,
@@ -261,6 +284,7 @@ com música em memória.
 | URI Android SAF em `argv[0]`/cwd e HostFS recusado | não tratar URI como caminho; imagem ISO com assets via CDFS |
 | `getstat` legado CDFS classifica arquivos incorretamente | leitura real para raiz e tipo `dread` no wrapper tinydir PS2 |
 | SDL rejeita PNG CDFS no filtro `fstat` de `SDL_RWFromFile` | wrapper read-only CDFS via `fopen` + `SDL_RWFromFP`, regressão com SDL real |
+| PNGs temporários retidos esgotam a RAM durante a carga | liberação após cópia, regressão de carga/recarga em 24 MiB e diagnóstico do heap EE |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |
 | SDL_mixer/formatos incompatíveis com PCM | frontend silencioso ou RFAuds2 + conversão offline |

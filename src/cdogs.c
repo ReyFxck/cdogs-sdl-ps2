@@ -193,6 +193,9 @@ int main(int argc, char *argv[])
 		err = EXIT_FAILURE;
 		goto bail;
 	}
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("video ready");
+#endif
 	FontLoadFromJSON(&gFont, "graphics/font.png", "graphics/font.json");
 #ifdef CDOGS_PS2
 	// A missing font must not reach the loading screen with null glyphs.
@@ -206,6 +209,9 @@ int main(int argc, char *argv[])
 	LoadingScreenInit(&gLoadingScreen, &gGraphicsDevice);
 	LoadingScreenDraw(&gLoadingScreen, "Loading graphics...", 0.0f);
 	PicManagerLoad(&gPicManager);
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("graphics loaded");
+#endif
 
 	GetDataFilePath(buf, "");
 	LOG(LM_MAIN, LL_INFO, "data dir(%s)", buf);
@@ -268,6 +274,9 @@ int main(int argc, char *argv[])
 	CampaignInit(&gCampaign);
 	PlayerDataInit(&gPlayerDatas);
 
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("main menu");
+#endif
 	LoadingScreenDraw(&gLoadingScreen, "Loading main menu...", 1.0f);
 	LoopRunner l = LoopRunnerNew();
 	LoopRunnerPush(&l, MainMenu(&gGraphicsDevice, &l));

@@ -291,6 +291,8 @@ static int hashmap_rehash(map_t m)
 		status = hashmap_put(m, curr[i].key, curr[i].data);
 		if (status != MAP_OK)
 			return status;
+		// hashmap_put owns a new key copy after rehashing.
+		free(curr[i].key);
 	}
 
 	free(curr);

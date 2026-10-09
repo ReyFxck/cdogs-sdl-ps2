@@ -11,3 +11,4 @@ void CDogsPS2DataPath(const char *path, char *out);
 void CDogsPS2ApplyConfig(Config *config);
 void CDogsPS2AddControllerMappings(void);
 void CDogsPS2AudioPump(void);
+void CDogsPS2LogMemory(const char *stage);

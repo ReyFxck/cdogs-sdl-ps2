@@ -41,7 +41,7 @@ endif()
 
 add_subdirectory(src)
 target_sources(cdogs-sdl PRIVATE platform/ps2/main.c platform/ps2/platform.c
-  platform/ps2/posix_paths.c platform/ps2/rwops.c)
+  platform/ps2/posix_paths.c platform/ps2/rwops.c platform/ps2/memory.c)
 set_source_files_properties("${PROJECT_SOURCE_DIR}/src/cdogs.c"
   TARGET_DIRECTORY cdogs-sdl PROPERTIES COMPILE_DEFINITIONS "main=CDogsMain")
 target_link_libraries(cdogs-sdl SDL2::SDL2main)
