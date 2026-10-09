@@ -28,7 +28,23 @@
 
 #include "config.h"
 #include "log.h"
+#include "ps2_platform.h"
 #include "texture.h"
+
+#include <SDL_timer.h>
+
+static bool trackMenu;
+static bool firstMenuFrame;
+static unsigned menuFrames;
+static Uint32 swTime, uploadTime, gsTime;
+
+void CDogsPS2TrackMenu(const bool active)
+{
+	trackMenu = active;
+	firstMenuFrame = active;
+	menuFrames = 0;
+	swTime = uploadTime = gsTime = 0;
+}
 
 bool WindowContextCreate(
 	WindowContext *wc, const Rect2i windowDim, const int windowFlags,
@@ -196,6 +212,7 @@ void WindowContextPreRender(WindowContext *wc)
 
 void WindowContextPostRender(WindowContext *wc)
 {
+	const Uint32 start = SDL_GetTicks();
 	if (SDL_SetRenderTarget(wc->renderer, wc->final) != 0)
 	{
 		LOG(LM_GFX, LL_ERROR, "Failed to set final target: %s",
@@ -213,15 +230,36 @@ void WindowContextPostRender(WindowContext *wc)
 	SDL_RenderSetLogicalSize(wc->renderer, 0, 0);
 	SDL_RenderCopy(wc->renderer, wc->final, NULL, NULL);
 	SDL_RenderPresent(wc->renderer);
+	const Uint32 composed = SDL_GetTicks();
 	if (SDL_UpdateTexture(wc->presentTexture, NULL,
 		wc->framebuffer->pixels, wc->framebuffer->pitch) != 0)
 	{
 		LOG(LM_GFX, LL_ERROR, "PS2 framebuffer upload: %s", SDL_GetError());
 		return;
 	}
+	const Uint32 uploaded = SDL_GetTicks();
 	SDL_RenderClear(wc->presenter);
 	SDL_RenderCopy(wc->presenter, wc->presentTexture, NULL, NULL);
 	SDL_RenderPresent(wc->presenter);
+	if (trackMenu)
+	{
+		if (firstMenuFrame)
+		{
+			LOG(LM_MAIN, LL_INFO, "PS2: first menu frame presented");
+			firstMenuFrame = false;
+		}
+		swTime += composed - start;
+		uploadTime += uploaded - composed;
+		gsTime += SDL_GetTicks() - uploaded;
+		if (++menuFrames == 30)
+		{
+			LOG(LM_MAIN, LL_INFO,
+				"PS2: menu frame avg compositor=%u upload=%u GS=%u ms / 30 frames",
+				swTime / menuFrames, uploadTime / menuFrames, gsTime / menuFrames);
+			menuFrames = 0;
+			swTime = uploadTime = gsTime = 0;
+		}
+	}
 
 	// Restore logical size for next frame's game rendering
 	SDL_RenderSetLogicalSize(

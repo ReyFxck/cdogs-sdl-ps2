@@ -11,18 +11,19 @@ Há duas variantes:
 | `OFF` (padrão) | desativada | pacote menor, sem arquivos de áudio |
 | `RFAUDS2` | PCM estéreo S16, 48 kHz, RFAuds2 no EE/IOP | conversão no PC com FFmpeg |
 
-**Os dois ELFs foram compilados com PS2SDK. Um teste no NetherSX2 confirmou
-boot da ISO, acesso CDFS, início de vídeo/PAD e criação de configuração no
-memory card, mas o menu e o SPU2 ainda não foram confirmados.** Não há BIOS
-nem emulador no ambiente em que este port foi preparado.
+**As variantes silenciosa e RFAuds2 compilaram com PS2SDK; o NetherSX2 chegou
+ao menu animado na ISO silenciosa v6.** A taxa relatada foi de cerca de 8 FPS,
+seguida por reinício do emulador. O log não mostra um trap do jogo; não sabemos
+ainda se o reinício foi causado pelo jogo ou por uma ação no emulador. O SPU2
+não foi testado. Não há BIOS nem emulador neste ambiente de build.
 O teste da v3 passou a abrir os PNGs, mas esgotou a RAM durante a carga gráfica
 e o jogo encerrou, retornando à BIOS. Esta revisão libera as imagens temporárias
 e adiciona diagnóstico do heap EE. A v4 exibiu as telas de carregamento, mas
 travou ao gerar a batalha de fundo do menu depois de falhas de leitura CDFS.
 Esta revisão corrige limites/enumeração do driver, elimina pixels duplicados
 na composição software. A v5 usou um fundo estático como precaução; esta revisão
-restaura a batalha animada original do menu no PS2, mantendo as correções de RAM
-e filesystem. O menu ainda requer confirmação no console.
+restaurou a batalha animada original do menu no PS2, mantendo as correções de RAM
+e filesystem. A revisão seguinte reduz o custo da animação e da carga gráfica.
 
 ## Build reproduzível no Linux
 
@@ -59,6 +60,12 @@ python3 -m venv .ps2iso
 ```
 
 O empacotador escreve `SYSTEM.CNF` e `CDOGS.ELF` na raiz ISO9660 para o boot.
+O estágio de assets gera também `graphics.ps2pack`: um fluxo sequencial dos PNGs
+originais, sem novas dependências de decodificação no PS2. Os arquivos soltos
+continuam no pacote para outros usos; sem o pack, o loader PS2 usa o caminho
+antigo. O carregamento deixa de abrir cada PNG separadamente e monta as listas
+de estilos uma única vez, depois de carregar todos os sprites. A economia de
+tempo efetiva ainda precisa ser medida no NetherSX2/PS2.
 Os assets ficam em Joliet, preservando maiúsculas/minúsculas, espaços e nomes
 maiores que 8.3. O CDFS do PS2SDK usado neste port lê essa árvore. O script
 verifica o ELF de boot e o hash de **cada arquivo** extraído da imagem, além
@@ -239,12 +246,17 @@ alocação limitada a 16 MiB. O pico caiu de 22.955.672 para aproximadamente
 Isso não representa o heap total do PS2: IOP, outras estruturas e campanhas
 podem mudar o consumo. O ELF escreve `PS2: heap video ready`, `graphics loaded`,
 `main menu`, `menu background start`, `menu background ready` e `menu ready`,
-além das contagens de armas/ammo/personagens. A batalha animada do menu está
-habilitada no PS2, com geração, atualização e desenho iguais ao upstream.
+além das contagens de armas/ammo/personagens. A batalha animada permanece no
+PS2; sua simulação e seu fundo são atualizados a cada três quadros do menu,
+enquanto o texto/input continuam a responder em todos os quadros. O fundo usa
+cores naturais escurecidas, evitando o tom aleatório e às vezes rosa do upstream.
+O log indica começo/fim do primeiro desenho do menu, primeira apresentação e
+tempos médios do compositor, upload e GS a cada 30 quadros. Isso ajuda a
+identificar gargalos ou um possível encerramento antes do primeiro frame.
 Dados obrigatórios ausentes geram uma mensagem e
 saída controlada, em vez de entrar na geração aleatória com arrays vazios.
-**O menu desta revisão ainda precisa de confirmação no emulador.** Não se
-comprova desempenho, controle em gameplay ou SPU2.
+**A revisão com estas otimizações ainda precisa de teste no emulador.** Não se
+comprova o FPS, controle em gameplay ou SPU2.
 
 ### ELF com HostFS no PC ou USB
 
@@ -312,7 +324,7 @@ python3 platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT"
 make -C "$RFAUDS2_ROOT" host-test
 ```
 
-Pendências reais: confirmar boot/menu, velocidade e memória no PCSX2/PS2;
+Pendências reais: medir velocidade/cor e investigar o reinício após o menu no NetherSX2/PS2;
 confirmar reprodução/underruns da RFAuds2 no SPU2; aprimorar throughput do
 renderer caso necessário. Rede/LAN, editor/OpenGL e decodificação comprimida
 no PS2 ficam fora deste milestone. Não se promete suporte aos imports Wolf3D
@@ -333,6 +345,8 @@ com música em memória.
 | PNGs temporários retidos esgotam a RAM durante a carga | liberação após cópia, regressão de carga/recarga em 24 MiB e diagnóstico do heap EE |
 | CDFS limita enumeração a 256 entradas e quatro diretórios físicos | módulo local com 512 entradas, snapshots EE e regressão com o parser real |
 | Cópia de pixels em Pic.Data e textura SDL consome RAM | buffer compartilhado apenas no compositor software fixado, regressão em 16 MiB |
+| Milhares de PNGs separados e recálculo de estilos a cada imagem | pack sequencial gerado no stage e cálculo único ao fim do carregamento PS2 |
+| Fundo animado pesa em cada frame e pode ficar rosa | simulação/desenho da batalha a cada três frames, tint escuro neutro apenas no PS2 |
 | Menu gera combate mesmo com assets incompletos | validação de dados obrigatórios antes do menu, preservando a batalha animada |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |

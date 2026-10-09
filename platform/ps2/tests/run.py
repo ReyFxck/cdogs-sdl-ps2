@@ -61,6 +61,7 @@ def main():
                         *libs, "-ldl", "-lm", "-o", str(temp / "rwops-test")], check=True)
         subprocess.run([str(temp / "rwops-test"), str(ROOT / "graphics/font.png")], check=True)
         graphics_sources = [PS2 / "tests/graphics_memory_test.c", PS2 / "platform.c", PS2 / "pic_texture.c",
+                            PS2 / "graphics_pack.c",
                             *[ROOT / "src/cdogs" / name for name in
                               ("pic.c", "pic_manager.c", "font.c", "utils.c", "cpic.c", "blit.c",
                                "c_array.c", "color.c", "vector.c", "texture.c",
@@ -85,6 +86,21 @@ def main():
         subprocess.run([str(temp / "mixer-test"), str(temp)], check=True)
         spec = importlib.util.spec_from_file_location("stage", PS2 / "stage.py")
         stage = importlib.util.module_from_spec(spec); spec.loader.exec_module(stage)
+        pack_a = temp / "pack-a"; pack_b = temp / "pack-b"
+        pack_a.mkdir(); pack_b.mkdir()
+        stage.pack_graphics(ROOT, pack_a); stage.pack_graphics(ROOT, pack_b)
+        assert (pack_a / stage.GRAPHICS_PACK).read_bytes() == (pack_b / stage.GRAPHICS_PACK).read_bytes()
+        (pack_a / "graphics").mkdir()
+        shutil.copy2(ROOT / "graphics/font.png", pack_a / "graphics/font.png")
+        (pack_a / "data").mkdir()
+        shutil.copy2(ROOT / "data/guns.json", pack_a / "data/guns.json")
+        subprocess.run([str(temp / "graphics-memory-test"), str(pack_a), str(png_count), "pack"],
+                       cwd=ROOT, env=env, check=True)
+        subprocess.run([*common, str(PS2 / "tests/graphics_pack_test.c"),
+                        str(PS2 / "graphics_pack.c"), *libs, "-lm",
+                        "-o", str(temp / "graphics-pack-test")], check=True)
+        subprocess.run([str(temp / "graphics-pack-test"), str(pack_a / stage.GRAPHICS_PACK),
+                        str(png_count)], check=True)
         # Real ffmpeg round-trip for WAV and a compressed file, plus a tracker
         # from the game. Exercise placeholders, skip source art, deterministic ZIP.
         if shutil.which("ffmpeg"):

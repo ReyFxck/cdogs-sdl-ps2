@@ -163,7 +163,8 @@ static void TextureLifetime(void)
 int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
-    assert(argc == 3); /* asset root, PNG count supplied by the test runner */
+    assert(argc == 3 || (argc == 4 && !strcmp(argv[3], "pack")));
+    const bool packed = argc == 4;
     assert(SDL_SetMemoryFunctions(__wrap_malloc, __wrap_calloc,
         __wrap_realloc, __wrap_free) == 0);
     assert(SDL_Init(SDL_INIT_VIDEO) == 0);
@@ -188,7 +189,9 @@ int main(int argc, char **argv)
         assert(gFont.Chars.size == 256);
         PicManagerInit(&gPicManager);
         PicManagerLoad(&gPicManager);
-        assert(images == (unsigned)atoi(argv[2]) + 1 && errors == 0);
+        if (packed && (images != 1u || errors != 0))
+            fprintf(stderr, "Packed load: image file opens=%u errors=%u\n", images, errors);
+        assert(images == (packed ? 1u : (unsigned)atoi(argv[2]) + 1u) && errors == 0);
         assert(hashmap_iterate(gPicManager.pics, CheckNamedPic, NULL) == MAP_OK);
         assert(hashmap_iterate(gPicManager.sprites, CheckSprites, NULL) == MAP_OK);
         assert(picCount > 3000);

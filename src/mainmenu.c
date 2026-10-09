@@ -52,6 +52,7 @@
 #include "options_menu.h"
 #include "prep.h"
 #ifdef CDOGS_PS2
+#include <SDL_timer.h>
 #include "ps2_platform.h"
 #endif
 
@@ -64,6 +65,13 @@ typedef struct
 	CustomCampaigns campaigns;
 	GameMode lastGameMode;
 	bool wasClient;
+#ifdef CDOGS_PS2
+	unsigned bgTicksPending;
+	unsigned bgDrawCountdown;
+	bool firstBgDraw;
+	unsigned bgUpdateSamples, bgDrawSamples;
+	Uint32 bgUpdateMs, bgDrawMs;
+#endif
 	DrawBuffer buffer;
 	HSV bgTint;
 	RunGameData rData;
@@ -129,12 +137,25 @@ static void GenerateLiveBackground(MainMenuData *data)
 
 	const HSV tint = {rand() * 360.0 / RAND_MAX, rand() * 1.0 / RAND_MAX, 0.5};
 	data->bgTint = tint;
+#ifdef CDOGS_PS2
+	// The random HSV hue can turn the entire battle pink. Preserve the art's
+	// original colours, darkened for legibility behind the menu.
+	data->bgTint = tintDarker;
+	data->bgTicksPending = 0;
+	data->bgDrawCountdown = 0;
+	data->firstBgDraw = true;
+	data->bgUpdateSamples = data->bgDrawSamples = 0;
+	data->bgUpdateMs = data->bgDrawMs = 0;
+#endif
 	DrawBufferInit(&data->buffer, svec2i(X_TILES, Y_TILES), data->graphics);
 	InitializeBadGuys();
 	CreateEnemies();
 	MapMarkAllAsVisited(&gMap);
 
 	GameInit(&data->rData, &gCampaign, &gMission, &gMap);
+#ifdef CDOGS_PS2
+	LOSSetAllVisible(&data->rData.map->LOS);
+#endif
 #ifdef CDOGS_PS2
 	CDogsPS2LogMemory("menu background ready");
 #endif
@@ -164,6 +185,9 @@ static void MainMenuResize(MainMenuData *data)
 {
 	DrawBufferTerminate(&data->buffer);
 	DrawBufferInit(&data->buffer, svec2i(X_TILES, Y_TILES), data->graphics);
+#ifdef CDOGS_PS2
+	data->bgDrawCountdown = 0;
+#endif
 
 	MenuResetSize(&data->ms);
 }
@@ -195,6 +219,7 @@ static void MainMenuOnEnter(GameLoopData *data)
 #ifdef CDOGS_PS2
 	CDogsPS2LogMemory("menu ready");
 	LOG(LM_MAIN, LL_INFO, "PS2: animated main menu ready");
+	CDogsPS2TrackMenu(true);
 #endif
 	NetClientDisconnect(&gNetClient);
 	NetServerClose(&gNetServer);
@@ -228,6 +253,9 @@ static void MainMenuOnEnter(GameLoopData *data)
 static void MainMenuOnExit(GameLoopData *data)
 {
 	MainMenuData *mData = data->Data;
+#ifdef CDOGS_PS2
+	CDogsPS2TrackMenu(false);
+#endif
 
 	// Reset player datas
 	PlayerDataTerminate(&gPlayerDatas);
@@ -252,8 +280,28 @@ static GameLoopResult MainMenuUpdate(GameLoopData *data, LoopRunner *l)
 		return UPDATE_RESULT_OK;
 	}
 
+#ifdef CDOGS_PS2
+	// The battle is decorative. Advance it at 10 Hz while menu/input can
+	// still refresh at 30 Hz; keep the elapsed simulation ticks together.
+	if (++mData->bgTicksPending == 3)
+	{
+		const Uint32 start = SDL_GetTicks();
+		LOSSetAllVisible(&mData->rData.map->LOS);
+		GameUpdate(&mData->rData, 3, NULL);
+		mData->bgUpdateMs += SDL_GetTicks() - start;
+		if (++mData->bgUpdateSamples == 10)
+		{
+			LOG(LM_MAIN, LL_INFO, "PS2: menu battle update avg=%u ms / 10 updates",
+				mData->bgUpdateMs / mData->bgUpdateSamples);
+			mData->bgUpdateSamples = 0;
+			mData->bgUpdateMs = 0;
+		}
+		mData->bgTicksPending = 0;
+	}
+#else
 	LOSSetAllVisible(&mData->rData.map->LOS);
 	GameUpdate(&mData->rData, 1, NULL);
+#endif
 
 	const GameLoopResult result = MenuUpdate(&mData->ms);
 	if (result == UPDATE_RESULT_OK)
@@ -287,6 +335,21 @@ static void MainMenuDraw(GameLoopData *data)
 	}
 	MainMenuData *mData = data->Data;
 	MenuDraw(&mData->ms);
+#ifdef CDOGS_PS2
+	// bkgTgt retains the previous battle frame, so only refresh that layer
+	// every third draw. The foreground menu remains interactive each draw.
+	if (mData->bgDrawCountdown)
+	{
+		mData->bgDrawCountdown--;
+		return;
+	}
+	mData->bgDrawCountdown = 2;
+	if (mData->firstBgDraw)
+	{
+		LOG(LM_MAIN, LL_INFO, "PS2: first menu battle draw starting");
+	}
+	const Uint32 start = SDL_GetTicks();
+#endif
 	const struct vec2 pos = svec2(
 		(gMap.Size.x + 1) * TILE_WIDTH * 0.5f,
 		(gMap.Size.y + 1) * TILE_HEIGHT * 0.5f);
@@ -294,6 +357,22 @@ static void MainMenuDraw(GameLoopData *data)
 	memset(&args, 0, sizeof args);
 	GrafxDrawBackground(
 		mData->graphics, &mData->buffer, mData->bgTint, pos, &args);
+#ifdef CDOGS_PS2
+	const Uint32 elapsed = SDL_GetTicks() - start;
+	if (mData->firstBgDraw)
+	{
+		LOG(LM_MAIN, LL_INFO, "PS2: first menu battle draw complete (%u ms)", elapsed);
+		mData->firstBgDraw = false;
+	}
+	mData->bgDrawMs += elapsed;
+	if (++mData->bgDrawSamples == 10)
+	{
+		LOG(LM_MAIN, LL_INFO, "PS2: menu battle draw avg=%u ms / 10 draws",
+			mData->bgDrawMs / mData->bgDrawSamples);
+		mData->bgDrawSamples = 0;
+		mData->bgDrawMs = 0;
+	}
+#endif
 }
 
 static menu_t *MenuCreateStart(

@@ -12,3 +12,4 @@ void CDogsPS2ApplyConfig(Config *config);
 void CDogsPS2AddControllerMappings(void);
 void CDogsPS2AudioPump(void);
 void CDogsPS2LogMemory(const char *stage);
+void CDogsPS2TrackMenu(bool active);

@@ -42,7 +42,7 @@ endif()
 add_subdirectory(src)
 target_sources(cdogs-sdl PRIVATE platform/ps2/main.c platform/ps2/platform.c
   platform/ps2/posix_paths.c platform/ps2/rwops.c platform/ps2/memory.c
-  platform/ps2/directory.c platform/ps2/pic_texture.c)
+  platform/ps2/directory.c platform/ps2/pic_texture.c platform/ps2/graphics_pack.c)
 include("${PROJECT_SOURCE_DIR}/platform/ps2/cmake/CDFS.cmake")
 set_source_files_properties("${PROJECT_SOURCE_DIR}/src/cdogs.c"
   TARGET_DIRECTORY cdogs-sdl PROPERTIES COMPILE_DEFINITIONS "main=CDogsMain")

@@ -27,10 +27,14 @@
 */
 #include "pic_manager.h"
 
+#include <stdlib.h>
 #include <tinydir/tinydir.h>
 
 #include "files.h"
 #include "log.h"
+#ifdef CDOGS_PS2
+#include "ps2_graphics_pack.h"
+#endif
 
 #define GRAPHICS_DIR "graphics"
 #define GRAPHICS_HD_DIR "graphics_hd"
@@ -176,7 +180,9 @@ static void PicManagerAdd(
 	SDL_UnlockSurface(image);
 	SDL_FreeSurface(image);
 
+#ifndef CDOGS_PS2
 	AfterAdd(&gPicManager);
+#endif
 }
 
 void PicManagerLoadDir(
@@ -247,13 +253,39 @@ void PicManagerLoadDir(
 bail:
 	tinydir_close(&dir);
 }
+#ifdef CDOGS_PS2
+static void PicManagerAddPacked(
+	void *context, const char *name, const bool isHD, SDL_Surface *image)
+{
+	PicManager *pm = context;
+	PicManagerAdd(pm->pics, pm->sprites, name, image, isHD);
+}
+#endif
 void PicManagerLoad(PicManager *pm)
 {
 	char buf[CDOGS_PATH_MAX];
+#ifdef CDOGS_PS2
+	GetDataFilePath(buf, "graphics.ps2pack");
+	const int packed = CDogsPS2LoadGraphicsPack(buf, PicManagerAddPacked, pm);
+	if (packed > 0)
+	{
+		AfterAdd(pm);
+		LOG(LM_MAIN, LL_INFO, "PS2: loaded %d graphics from sequential pack", packed);
+		return;
+	}
+	if (packed == -2)
+	{
+		LOG(LM_MAIN, LL_ERROR, "PS2: invalid graphics.ps2pack; aborting incomplete graphics load");
+		exit(EXIT_FAILURE);
+	}
+#endif
 	GetDataFilePath(buf, GRAPHICS_DIR);
 	PicManagerLoadDir(pm, buf, NULL, pm->pics, pm->sprites, false);
 	GetDataFilePath(buf, GRAPHICS_HD_DIR);
 	PicManagerLoadDir(pm, buf, NULL, pm->pics, pm->sprites, true);
+#ifdef CDOGS_PS2
+	AfterAdd(pm);
+#endif
 }
 
 static void FindStylePics(

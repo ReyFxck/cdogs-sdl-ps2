@@ -5,6 +5,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import wave
 import zipfile
@@ -14,6 +15,32 @@ ASSETS = ("data", "graphics", "missions", "dogfights", "music", "sounds")
 AUDIO = {".wav", ".ogg", ".mp3", ".it", ".mod", ".s3m", ".xm"}
 SOURCE = {".blend", ".xcf", ".psd", ".aseprite", ".kra"}
 MARKER = ".cdogs-ps2-package"
+GRAPHICS_PACK = "graphics.ps2pack"
+
+
+def pack_graphics(source, output):
+    """Read the stock PNGs in one sequential CDFS stream at boot."""
+    entries = []
+    for root, is_hd in (("graphics", False), ("graphics_hd", True)):
+        directory = source / root
+        if directory.is_dir():
+            for path in sorted(directory.rglob("*")):
+                if path.is_file() and path.suffix.lower() == ".png":
+                    name = path.relative_to(directory).with_suffix("").as_posix().encode("utf-8")
+                    if not name or len(name) > 255 or path.stat().st_size > 2 * 1024 * 1024:
+                        raise ValueError(f"Graphics pack entry outside loader limits: {path}")
+                    entries.append((name, is_hd, path))
+    if not entries:
+        raise ValueError("No PNGs to pack")
+    with (output / GRAPHICS_PACK).open("wb") as packed:
+        packed.write(b"CDGSPNG1" + struct.pack("<I", len(entries)))
+        for name, is_hd, path in entries:
+            size = path.stat().st_size
+            packed.write(struct.pack("<HBI", len(name), is_hd, size))
+            packed.write(name)
+            with path.open("rb") as image:
+                shutil.copyfileobj(image, packed)
+    print(f"Packed {len(entries)} PNGs into {GRAPHICS_PACK}")
 
 
 def decode(source, dest):
@@ -68,6 +95,7 @@ def stage(source, elf, output, audio=False, rfa_root=None):
                     pcm_bytes += pcm.stat().st_size
                 else:
                     shutil.copy2(path, dest)
+    pack_graphics(source, output)
     (output / "config").mkdir()
     # Retain both code licensing and all asset attribution documentation.
     for name in ("COPYING", "AUTHORS", "README.md"):

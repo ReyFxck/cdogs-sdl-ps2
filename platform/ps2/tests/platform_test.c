@@ -161,14 +161,37 @@ static void Render(void)
         struct vec2i logical = {320, 240};
         assert(WindowContextCreate(&wc, dim, SDL_WINDOW_HIDDEN, "PS2 host test", NULL, logical));
         assert(SDL_RenderTargetSupported(wc.renderer));
+        Uint32 format;
+        assert(SDL_QueryTexture(wc.presentTexture, &format, NULL, NULL, NULL) == 0);
+        assert(format == SDL_PIXELFORMAT_ABGR8888);
         WindowContextPreRender(&wc);
         SDL_SetRenderDrawColor(wc.renderer, 230, 30, 80, 255);
         SDL_Rect rect = {10, 20, 5, 5};
         assert(SDL_RenderFillRect(wc.renderer, &rect) == 0);
+        const Uint8 channels[][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
+        for (int i = 0; i < 3; i++)
+        {
+            assert(SDL_SetRenderDrawColor(wc.renderer,
+                channels[i][0], channels[i][1], channels[i][2], 255) == 0);
+            SDL_Rect swatch = {40 + 10 * i, 20, 5, 5};
+            assert(SDL_RenderFillRect(wc.renderer, &swatch) == 0);
+        }
         WindowContextPostRender(&wc);
         Uint32 pixel = *(Uint32 *)((Uint8 *)wc.framebuffer->pixels + 20 * wc.framebuffer->pitch + 10 * 4);
         Uint8 r, g, b, a; SDL_GetRGBA(pixel, wc.framebuffer->format, &r, &g, &b, &a);
         assert(r == 230 && g == 30 && b == 80 && a == 255);
+        for (int i = 0; i < 3; i++)
+        {
+            const Uint8 *raw = (Uint8 *)wc.framebuffer->pixels +
+                20 * wc.framebuffer->pitch + (40 + 10 * i) * 4;
+            pixel = *(const Uint32 *)raw;
+            SDL_GetRGBA(pixel, wc.framebuffer->format, &r, &g, &b, &a);
+            assert(r == channels[i][0] && g == channels[i][1] &&
+                b == channels[i][2] && a == 255);
+#if SDL_BYTEORDER == SDL_LIL_ENDIAN
+            assert(raw[0] == r && raw[1] == g && raw[2] == b && raw[3] == a);
+#endif
+        }
         WindowContextDestroy(&wc);
         assert(!wc.window && !wc.renderer && !wc.framebuffer);
     }
