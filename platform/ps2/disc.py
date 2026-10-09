@@ -55,6 +55,15 @@ def package_entries(package):
         if relative.name.upper() in {"SYSTEM.CNF", "CDOGS.ELF"} and relative.parent == Path("."):
             raise ValueError(f"Reserved disc boot filename: {relative}")
         entries.append((path, relative))
+    for parent, names in siblings.items():
+        # Game-local CDFS has 512 slots; non-root listings include '..'.
+        # Root also gets SYSTEM.CNF (CDOGS.ELF already appears in entries).
+        if len(names) + 1 >= 512:
+            raise ValueError(f"Directory exceeds game CDFS entry limit: {parent}")
+    for _, relative in entries:
+        # The pinned SDK's splitPath still terminates its directory at byte 255.
+        if len("/" + relative.parent.as_posix()) >= 255:
+            raise ValueError(f"Parent path exceeds SDK CDFS limit: {relative}")
     return entries
 
 

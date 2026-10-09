@@ -26,6 +26,8 @@ def main():
     parser.add_argument("--rfa-root", type=Path, required=True)
     parser.add_argument("--sdl-prefix", type=Path)
     parser.add_argument("--require-iso", action="store_true", help="Fail unless pycdlib/ISO regressions are available")
+    parser.add_argument("--ps2sdk-source", type=Path, default=ROOT / ".ps2deps/ps2sdk",
+                        help="SDK checkout for real CDFS parser regression tests")
     args = parser.parse_args()
     rfa = args.rfa_root.resolve()
     sdl_config = str(args.sdl_prefix / "bin/sdl2-config") if args.sdl_prefix else shutil.which("sdl2-config")
@@ -51,11 +53,14 @@ def main():
                         *libs, "-lm", "-o", str(temp / "platform-test")], check=True)
         env = os.environ.copy(); env["SDL_VIDEODRIVER"] = "dummy"
         subprocess.run([str(temp / "platform-test")], cwd=ROOT, env=env, check=True)
+        subprocess.run([*common, str(PS2 / "tests/directory_test.c"), str(PS2 / "directory.c"),
+                        "-o", str(temp / "directory-test")], check=True)
+        subprocess.run([str(temp / "directory-test")], cwd=ROOT, check=True)
         subprocess.run([*common, str(PS2 / "tests/rwops_test.c"), str(PS2 / "rwops.c"),
                         "-Wl,--gc-sections", "-Wl,--wrap=SDL_RWFromFile", "-Wl,--export-dynamic",
                         *libs, "-ldl", "-lm", "-o", str(temp / "rwops-test")], check=True)
         subprocess.run([str(temp / "rwops-test"), str(ROOT / "graphics/font.png")], check=True)
-        graphics_sources = [PS2 / "tests/graphics_memory_test.c", PS2 / "platform.c",
+        graphics_sources = [PS2 / "tests/graphics_memory_test.c", PS2 / "platform.c", PS2 / "pic_texture.c",
                             *[ROOT / "src/cdogs" / name for name in
                               ("pic.c", "pic_manager.c", "font.c", "utils.c", "cpic.c", "blit.c",
                                "c_array.c", "color.c", "vector.c", "texture.c",
@@ -92,6 +97,10 @@ def main():
             (fixture / "data/guns.json").write_text("{}\n")
             (fixture / "graphics/font.png").write_bytes(b"\x89PNG\r\n\x1a\n")
             (fixture / "graphics/table_wood_round_terminal_wreck.png").write_bytes(b"full filename")
+            # Stock CDFS truncates this directory at 256; the game-local module
+            # must enumerate and read every file, not merely find known names.
+            for i in range(300):
+                (fixture / "graphics" / f"entry-{i:03d}.dat").write_bytes(bytes([i % 256]))
             deep = fixture / "missions/A.cdogscpn/graphics/enemies/collection/direction/frames"
             deep.mkdir(parents=True)
             (deep / "body (old)-red.png").write_bytes(b"depth and punctuation")
@@ -128,6 +137,21 @@ def main():
                 disc.build_iso(package, temp / "a.iso")
                 disc.build_iso(package, temp / "b.iso")
                 assert disc.hash_file(temp / "a.iso") == disc.hash_file(temp / "b.iso")
+                if (args.ps2sdk_source / "iop/cdvd/cdfs/src/cdfs_iop.c").is_file():
+                    spec = importlib.util.spec_from_file_location("prepare_cdfs", PS2 / "tools/prepare_cdfs.py")
+                    cdfs = importlib.util.module_from_spec(spec); spec.loader.exec_module(cdfs)
+                    patched = temp / "cdfs"
+                    cdfs.prepare(args.ps2sdk_source, patched)
+                    subprocess.run([os.environ.get("CC", "cc"), "-std=c99", "-O2", "-Wall", "-Wextra",
+                                    "-Wno-unused-parameter", "-D_POSIX_C_SOURCE=200809L",
+                                    "-I" + str(PS2 / "tests/cdfs_stubs"), "-I" + str(patched),
+                                    str(PS2 / "tests/cdfs_parser_test.c"), str(patched / "cdfs_iop.c"),
+                                    "-o", str(temp / "cdfs-parser-test")], check=True)
+                    count = sum(p.is_file() for p, _ in disc.package_entries(package)) + 1
+                    subprocess.run([str(temp / "cdfs-parser-test"), str(temp / "a.iso"),
+                                    "interfere", str(count), str(package)], check=True)
+                elif args.require_iso:
+                    raise RuntimeError("CDFS regression requires --ps2sdk-source (bootstrap.py provides it)")
                 try:
                     disc.build_iso(package, package / "bad.iso")
                 except ValueError:
@@ -141,6 +165,17 @@ def main():
                     pass
                 else:
                     raise AssertionError("CDFS case collision accepted")
+                (package / "data/GUNS.JSON").unlink()
+                oversized = package / "data/oversized"
+                oversized.mkdir()
+                for i in range(512):
+                    (oversized / str(i)).touch()
+                try:
+                    disc.package_entries(package)
+                except ValueError as e:
+                    assert "entry limit" in str(e)
+                else:
+                    raise AssertionError("CDFS directory overflow accepted")
                 print("Bootable ISO, full Joliet names, depth, hashes, determinism and guards OK")
             elif args.require_iso:
                 raise RuntimeError("Install platform/ps2/requirements-iso.txt for ISO regressions")

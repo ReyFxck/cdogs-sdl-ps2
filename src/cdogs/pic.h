@@ -34,6 +34,9 @@ typedef struct
 	struct vec2i size;
 	struct vec2i offset;
 	bool isHD;
+#ifdef CDOGS_PS2
+	bool DataFromTexture;
+#endif
 	Uint32 *Data;
 	SDL_Texture *Tex;
 } Pic;

@@ -276,6 +276,18 @@ int main(int argc, char *argv[])
 
 #ifdef CDOGS_PS2
 	CDogsPS2LogMemory("main menu");
+	LOG(LM_MAIN, LL_INFO, "PS2: assets guns=%u ammo=%u characters=%u",
+		(unsigned)gWeaponClasses.Guns.size, (unsigned)gAmmo.Ammo.size,
+		(unsigned)gCharacterClasses.Classes.size);
+	if (!gWeaponClasses.Guns.size || !gAmmo.Ammo.size ||
+		!gCharacterClasses.Classes.size || !PicManagerGetPic(&gPicManager, "logo"))
+	{
+		LOG(LM_MAIN, LL_ERROR, "PS2: required game data missing; refusing incomplete menu");
+		LoadingScreenDraw(&gLoadingScreen, "Missing game data; see log", 1.0f);
+		SDL_Delay(5000);
+		err = EXIT_FAILURE;
+		goto bail;
+	}
 #endif
 	LoadingScreenDraw(&gLoadingScreen, "Loading main menu...", 1.0f);
 	LoopRunner l = LoopRunnerNew();

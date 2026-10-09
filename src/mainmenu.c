@@ -51,6 +51,9 @@
 #include "menu.h"
 #include "options_menu.h"
 #include "prep.h"
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
 
 typedef struct
 {
@@ -61,6 +64,7 @@ typedef struct
 	CustomCampaigns campaigns;
 	GameMode lastGameMode;
 	bool wasClient;
+	bool liveBackground;
 	DrawBuffer buffer;
 	HSV bgTint;
 	RunGameData rData;
@@ -80,6 +84,10 @@ GameLoopData *MainMenu(GraphicsDevice *graphics, LoopRunner *l)
 {
 	MainMenuData *data;
 	CMALLOC(data, sizeof *data);
+	memset(data, 0, sizeof *data);
+#ifndef CDOGS_PS2
+	data->liveBackground = true;
+#endif
 	data->graphics = graphics;
 	memset(&data->creditsDisplayer, 0, sizeof data->creditsDisplayer);
 	LoadCredits(&data->creditsDisplayer, colorPurple, colorDarker);
@@ -96,6 +104,11 @@ GameLoopData *MainMenu(GraphicsDevice *graphics, LoopRunner *l)
 }
 static void GenerateLiveBackground(MainMenuData *data)
 {
+	// PS2's first milestone reserves RAM/CPU for the UI and actual gameplay.
+	if (!data->liveBackground)
+	{
+		return;
+	}
 	MissionOptionsTerminate(&gMission);
 	CampaignTerminate(&gCampaign);
 
@@ -152,8 +165,11 @@ static void MainMenuReset(MainMenuData *data)
 // looked jarring when dragging the window edge (the map changed every frame).
 static void MainMenuResize(MainMenuData *data)
 {
-	DrawBufferTerminate(&data->buffer);
-	DrawBufferInit(&data->buffer, svec2i(X_TILES, Y_TILES), data->graphics);
+	if (data->liveBackground)
+	{
+		DrawBufferTerminate(&data->buffer);
+		DrawBufferInit(&data->buffer, svec2i(X_TILES, Y_TILES), data->graphics);
+	}
 
 	MenuResetSize(&data->ms);
 }
@@ -182,6 +198,10 @@ static void MainMenuOnEnter(GameLoopData *data)
 	CampaignSettingTerminateAll(&gCampaign.Setting);
 
 	MainMenuReset(mData);
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("menu ready");
+	LOG(LM_MAIN, LL_INFO, "PS2: static main menu ready");
+#endif
 	NetClientDisconnect(&gNetClient);
 	NetServerClose(&gNetServer);
 	GameEventsTerminate(&gGameEvents);
@@ -238,8 +258,11 @@ static GameLoopResult MainMenuUpdate(GameLoopData *data, LoopRunner *l)
 		return UPDATE_RESULT_OK;
 	}
 
-	LOSSetAllVisible(&mData->rData.map->LOS);
-	GameUpdate(&mData->rData, 1, NULL);
+	if (mData->liveBackground)
+	{
+		LOSSetAllVisible(&mData->rData.map->LOS);
+		GameUpdate(&mData->rData, 1, NULL);
+	}
 
 	const GameLoopResult result = MenuUpdate(&mData->ms);
 	if (result == UPDATE_RESULT_OK)
@@ -273,6 +296,10 @@ static void MainMenuDraw(GameLoopData *data)
 	}
 	MainMenuData *mData = data->Data;
 	MenuDraw(&mData->ms);
+	if (!mData->liveBackground)
+	{
+		return;
+	}
 	const struct vec2 pos = svec2(
 		(gMap.Size.x + 1) * TILE_WIDTH * 0.5f,
 		(gMap.Size.y + 1) * TILE_HEIGHT * 0.5f);

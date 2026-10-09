@@ -34,6 +34,9 @@
 #include "log.h"
 #include "texture.h"
 #include "utils.h"
+#ifdef CDOGS_PS2
+#include "ps2_pic.h"
+#endif
 
 map_t textureDebugger = NULL;
 
@@ -123,6 +126,9 @@ bool PicTryMakeTex(Pic *p)
 	{
 		textureDebugger = hashmap_new();
 	}
+#ifdef CDOGS_PS2
+	return CDogsPS2PicMakeTex(p);
+#else
 	if (p->Tex != NULL)
 	{
 		LOG(LM_GFX, LL_TRACE, "destroying texture %p data(%p)", p->Tex, p->Data);
@@ -186,6 +192,7 @@ bool PicTryMakeTex(Pic *p)
 		}
 	}
 	return true;
+#endif
 }
 
 // Note: does not copy the texture
@@ -197,6 +204,9 @@ Pic PicCopy(const Pic *src)
 	CMALLOC(p.Data, size);
 	memcpy(p.Data, src->Data, size);
 	p.Tex = NULL;
+#ifdef CDOGS_PS2
+	p.DataFromTexture = false;
+#endif
 	p.isHD = src->isHD;
 	return p;
 }
@@ -230,8 +240,15 @@ void PicFree(Pic *pic)
 		}
 	}
 	pic->size = svec2i_zero();
+#ifdef CDOGS_PS2
+	if (!pic->DataFromTexture)
+#endif
 	CFREE(pic->Data);
 	pic->Data = NULL;
+	pic->Tex = NULL;
+#ifdef CDOGS_PS2
+	pic->DataFromTexture = false;
+#endif
 }
 
 bool PicIsNone(const Pic *pic)
@@ -297,6 +314,15 @@ void PicShrink(Pic *pic, const struct vec2i size, const struct vec2i offset)
 		}
 	}
 	// Replace the old data
+#ifdef CDOGS_PS2
+	if (pic->DataFromTexture)
+	{
+		SDL_DestroyTexture(pic->Tex);
+		pic->Tex = NULL;
+		pic->DataFromTexture = false;
+	}
+	else
+#endif
 	CFREE(pic->Data);
 	pic->Data = newData;
 	pic->size = size;

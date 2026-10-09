@@ -17,7 +17,7 @@
 #include "ps2_platform.h"
 #include "utils.h"
 
-#define BUDGET (24u * 1024u * 1024u)
+#define BUDGET (16u * 1024u * 1024u)
 #define MAGIC UINT64_C(0x43444f47534d454d)
 typedef union
 {
@@ -107,6 +107,11 @@ static void CheckPic(Pic *p)
     int w, h; Uint32 format;
     assert(SDL_QueryTexture(p->Tex, &format, NULL, &w, &h) == 0);
     assert(w == p->size.x && h == p->size.y && !p->isHD);
+    void *pixels; int pitch;
+    assert(p->DataFromTexture);
+    assert(SDL_LockTexture(p->Tex, NULL, &pixels, &pitch) == 0);
+    assert(pixels == p->Data && pitch == w * (int)sizeof *p->Data);
+    SDL_UnlockTexture(p->Tex);
     pixelBytes += (size_t)w * h * sizeof *p->Data;
     ++picCount;
 }
@@ -120,6 +125,39 @@ static int CheckSprites(any_t data, any_t item)
     NamedSprites *ns = item;
     for (size_t i = 0; i < ns->pics.size; ++i) CheckPic(CArrayGet(&ns->pics, i));
     return MAP_OK;
+}
+
+static void TextureLifetime(void)
+{
+    SDL_Surface *s = SDL_CreateRGBSurfaceWithFormat(0, 2, 2, 32, SDL_PIXELFORMAT_ARGB8888);
+    assert(s);
+    Uint32 original[] = {0xffff0000, 0xff00ff00, 0xff0000ff, 0xffffffff};
+    memcpy(s->pixels, original, sizeof original);
+    Pic p;
+    PicLoad(&p, svec2i(2, 2), svec2i_zero(), s, false);
+    assert(p.DataFromTexture && !memcmp(p.Data, original, sizeof original));
+    Pic copy = PicCopy(&p);
+    assert(!copy.DataFromTexture && !copy.Tex && copy.Data != p.Data);
+    copy.Data[0] = 0xff888888;
+    assert(PicTryMakeTex(&copy) && copy.DataFromTexture);
+    assert(p.Data[0] == original[0] && copy.Data[0] == 0xff888888);
+    for (int i = 0; i < 10; i++)
+    {
+        assert(PicTryMakeTex(&copy));
+        assert(copy.Data[0] == 0xff888888);
+    }
+    // Queue rendering before resize: destruction must flush using live pixels.
+    SDL_Rect dst = {0, 0, 2, 2};
+    assert(SDL_RenderCopy(gGraphicsDevice.gameWindow.renderer, p.Tex, NULL, &dst) == 0);
+    PicShrink(&p, svec2i(1, 1), svec2i(1, 1));
+    assert(p.DataFromTexture && p.Data[0] == original[3]);
+    Uint32 rendered[4];
+    SDL_Rect area = {0, 0, 2, 2};
+    assert(SDL_RenderReadPixels(gGraphicsDevice.gameWindow.renderer, &area,
+        SDL_PIXELFORMAT_ARGB8888, rendered, 8) == 0);
+    assert(!memcmp(rendered, original, sizeof original));
+    PicFree(&copy); PicFree(&p); SDL_FreeSurface(s);
+    assert(!copy.Tex && !p.Tex && !copy.Data && !p.Data);
 }
 
 int main(int argc, char **argv)
@@ -139,6 +177,7 @@ int main(int argc, char **argv)
     gGraphicsDevice.Format = SDL_AllocFormat(SDL_PIXELFORMAT_ARGB8888);
     assert(gGraphicsDevice.gameWindow.renderer && gGraphicsDevice.Format);
     const size_t baseline = live;
+    TextureLifetime();
     size_t steady = 0;
     for (int round = 0; round < 3; ++round)
     {
@@ -171,6 +210,6 @@ int main(int argc, char **argv)
     hashmap_free(textureDebugger);
     printf("After SDL shutdown: live=%zu\n", live);
     assert(live == 0);
-    puts("Real graphics fit the 24 MiB allocation budget; load/unload lifetime OK");
+    puts("Real graphics fit the 16 MiB allocation budget; shared-pixel lifetime OK");
     return 0;
 }

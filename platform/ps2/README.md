@@ -17,7 +17,10 @@ memory card, mas o menu e o SPU2 ainda não foram confirmados.** Não há BIOS
 nem emulador no ambiente em que este port foi preparado.
 O teste da v3 passou a abrir os PNGs, mas esgotou a RAM durante a carga gráfica
 e o jogo encerrou, retornando à BIOS. Esta revisão libera as imagens temporárias
-e adiciona diagnóstico do heap EE; ainda requer confirmação do menu no console.
+e adiciona diagnóstico do heap EE. A v4 exibiu as telas de carregamento, mas
+travou ao gerar a batalha de fundo do menu depois de falhas de leitura CDFS.
+Esta revisão corrige limites/enumeração do driver, elimina pixels duplicados
+na composição software e usa um menu estático no PS2; ainda requer teste no console.
 
 ## Build reproduzível no Linux
 
@@ -85,11 +88,19 @@ ports deve estar em `$PS2SDK/ports`, estático, com o renderer PS2 e o renderer
 software habilitados, e **compilado com `SDL_AUDIO=OFF`**. Isso evita que o
 SDL2main inicialize o driver audsrv mesmo quando o jogo não abre áudio.
 O bootstrap acima também pode recompilar o SDL nessa instalação existente.
+O jogo também compila e embute um módulo CDFS próprio a partir das fontes do
+PS2SDK. Defina `PS2SDKSRC` para um checkout compatível (a revisão do lock é
+testada); o bootstrap já fornece esse checkout e a variável. As correções são
+aplicadas **apenas em cópias dentro do diretório de build**, sem alterar o SDK.
+Fontes originais: `https://github.com/ps2dev/ps2sdk`, revisão em `deps.lock.json`.
+As modificações ficam em `tools/prepare_cdfs.py` deste port. A licença do SDK
+acompanha o pacote como `PS2SDK-LICENSE.txt`.
 
 ```sh
 export PS2DEV=/opt/ps2dev
 export PS2SDK="$PS2DEV/ps2sdk"
 export GSKIT="$PS2DEV/gsKit"
+export PS2SDKSRC=/caminho/fontes/ps2sdk
 export PATH="$PS2DEV/ee/bin:$PS2DEV/iop/bin:$PS2DEV/bin:$PATH"
 python3 platform/ps2/build.py --audio OFF
 ```
@@ -192,15 +203,45 @@ carga repetida também revelou e corrigiu ownership das listas de estilos, dos
 mapas gráficos e das chaves antigas no rehash. São correções de liberação de
 memória, sem mudar os assets, o renderer ou as opções desktop.
 
+A v4 avançou até `Loading main menu...`, mas seu log terminou em um trap em
+`SetupQuickPlayCampaign`: várias leituras CDFS falharam e não havia armas para
+gerar a batalha de fundo. Também expôs dois limites do driver: quatro pastas
+abertas simultaneamente (o loader recursivo passa disso) e 256 entradas por
+pasta (a raiz gráfica passa disso). Esta revisão embute `cdogs_cdfs`, substitui
+o driver stock após o startup da SDL e guarda snapshots compactos no EE, fechando
+o diretório físico antes de recursão. O módulo suporta 512 entradas com um único
+diretório físico, corrigindo também EOF/getstat e o arredondamento dos setores.
+O empacotador recusa diretórios/caminhos que excedem os limites do driver.
+
+O parser não usa mais o `strtok` compartilhado do IOP para resolver caminhos.
+Um teste de interferência entre leituras reproduz falhas no parser original e
+passa com o cursor local. Isso é uma proteção verificada em teste, **não uma
+prova de que tal interferência causou cada falha registrada no NetherSX2**.
+O teste nativo do leitor usa as fontes reais do SDK, com transporte CDVD de
+arquivo, e lê/compara todos os conteúdos da ISO; não apenas os metadados do
+empacotador. O mesmo teste cobre uma pasta com mais de 256 arquivos e oito
+níveis de enumeração via tinydir, com pais estáveis e um único handle físico.
+
+No PS2, `Pic.Data` agora usa o próprio buffer da textura streaming do compositor
+software, removendo a cópia duplicada dos pixels. Esse contrato depende da SDL
+fixada no lock: o backend software devolve um buffer estável e tightly-packed,
+e seu unlock não realoca. Não é um contrato genérico para renderers acelerados.
+O adaptador verifica o nome do backend e o pitch; os testes verificam aliasing,
+cópia, recriação, trim/resize e desenho enfileirado antes de destruir a textura.
+O renderer acelerado de apresentação não usa essa otimização. Desktop continua
+com sua representação original e SDL2_mixer.
+
 O teste nativo carrega os 1.695 PNGs, 5.672 sprites e a fonte três vezes com
-alocação limitada a 24 MiB para o loader e SDL real. O pico verificado foi de
-22.955.672 bytes; após encerramento da SDL e do seu TLS, as alocações rastreadas
-retornaram a zero. Isso não representa uma medição do PS2: ponteiros, allocator,
-IOP, outras estruturas e campanhas podem mudar o consumo. O novo ELF escreve
-`PS2: heap video ready`, `graphics loaded` e `main menu`, com bytes usados/livres
-do heap real do EE, para diagnosticar o próximo teste sem confundir uma saída
-do jogo com um disco inválido. **O menu desta revisão ainda precisa de
-confirmação no emulador.** Não se comprova desempenho, controle ou SPU2.
+alocação limitada a 16 MiB. O pico caiu de 22.955.672 para aproximadamente
+13,3 MB; após encerramento da SDL/TLS, as alocações rastreadas retornam a zero.
+Isso não representa o heap total do PS2: IOP, outras estruturas e campanhas
+podem mudar o consumo. O ELF escreve `PS2: heap video ready`, `graphics loaded`,
+`main menu` e `menu ready`, além das contagens de armas/ammo/personagens.
+O menu PS2 não gera a batalha animada ao fundo, poupando RAM/CPU; o desktop
+conserva o fundo original. Dados obrigatórios ausentes geram uma mensagem e
+saída controlada, em vez de entrar na geração aleatória com arrays vazios.
+**O menu desta revisão ainda precisa de confirmação no emulador.** Não se
+comprova desempenho, controle em gameplay ou SPU2.
 
 ### ELF com HostFS no PC ou USB
 
@@ -240,7 +281,8 @@ Vídeo: composição software SDL em 320×240, seguida de upload de um framebuff
 para o renderer PS2/gsKit. O driver acelerado PS2 não implementa o render target
 usado pelo jogo; essa composição conserva o pipeline original sem renderer
 nativo novo. O tamanho fica fixo e as opções gráficas desktop são ocultadas.
-O loader agora libera PNGs temporários; o consumo dinâmico de texturas/campanhas
+O loader libera PNGs temporários e evita duplicar pixels das texturas software;
+o consumo dinâmico de campanhas
 ainda deve ser medido nos 32 MiB do EE pelas linhas de diagnóstico do heap.
 
 Controle: mapeamento explícito do PAD da SDL para SDL_GameController, usando o
@@ -263,6 +305,7 @@ Os testes locais da camada PS2 podem ser executados com SDL2 nativa:
 python3 platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT"
 # Incluindo verificação de ISO, nomes longos, hashes e determinismo:
 # .ps2iso/bin/python platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT" --require-iso
+# Fora do bootstrap, informe também --ps2sdk-source "$PS2SDKSRC".
 make -C "$RFAUDS2_ROOT" host-test
 ```
 
@@ -285,6 +328,9 @@ com música em memória.
 | `getstat` legado CDFS classifica arquivos incorretamente | leitura real para raiz e tipo `dread` no wrapper tinydir PS2 |
 | SDL rejeita PNG CDFS no filtro `fstat` de `SDL_RWFromFile` | wrapper read-only CDFS via `fopen` + `SDL_RWFromFP`, regressão com SDL real |
 | PNGs temporários retidos esgotam a RAM durante a carga | liberação após cópia, regressão de carga/recarga em 24 MiB e diagnóstico do heap EE |
+| CDFS limita enumeração a 256 entradas e quatro diretórios físicos | módulo local com 512 entradas, snapshots EE e regressão com o parser real |
+| Cópia de pixels em Pic.Data e textura SDL consome RAM | buffer compartilhado apenas no compositor software fixado, regressão em 16 MiB |
+| Menu gera combate mesmo com assets incompletos | validação de dados obrigatórios e fundo estático só no PS2 |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |
 | SDL_mixer/formatos incompatíveis com PCM | frontend silencioso ou RFAuds2 + conversão offline |

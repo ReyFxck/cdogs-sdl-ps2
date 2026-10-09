@@ -75,6 +75,9 @@ def stage(source, elf, output, audio=False, rfa_root=None):
             shutil.copy2(source / name, output / name)
     shutil.copytree(source / "doc", output / "doc", dirs_exist_ok=True)
     shutil.copy2(source / "platform/ps2/README.md", output / "README-PS2.md")
+    sdk_license = source / "platform/ps2/LICENSE-PS2SDK.txt"
+    if sdk_license.is_file():
+        shutil.copy2(sdk_license, output / "PS2SDK-LICENSE.txt")
     if audio:
         if not rfa_root or not (rfa_root / "LICENSE").is_file():
             raise ValueError("--audio requires --rfa-root (RFAuds2 license must accompany the binary)")
