@@ -109,10 +109,14 @@ def main():
     parser.add_argument("--audio", action="store_true")
     parser.add_argument("--rfa-root", type=Path)
     parser.add_argument("--zip", type=Path)
+    parser.add_argument("--iso", type=Path, help="Bootable disc image (install requirements-iso.txt first)")
     args = parser.parse_args()
     stage(ROOT, args.elf, args.output, args.audio, args.rfa_root)
     if args.zip:
         archive(args.output, args.zip)
+    if args.iso:
+        from disc import build_iso
+        build_iso(args.output, args.iso)
 
 
 if __name__ == "__main__":

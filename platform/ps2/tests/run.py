@@ -25,6 +25,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--rfa-root", type=Path, required=True)
     parser.add_argument("--sdl-prefix", type=Path)
+    parser.add_argument("--require-iso", action="store_true", help="Fail unless pycdlib/ISO regressions are available")
     args = parser.parse_args()
     rfa = args.rfa_root.resolve()
     sdl_config = str(args.sdl_prefix / "bin/sdl2-config") if args.sdl_prefix else shutil.which("sdl2-config")
@@ -46,7 +47,8 @@ def main():
                             ROOT / "src/cdogs/color.c", ROOT / "src/cdogs/texture.c",
                             ROOT / "src/cdogs/mathc/mathc.c"]
         subprocess.run([*common, "-Dbasename=PS2Basename", "-Ddirname=PS2Dirname",
-                        *map(str, platform_sources), "-Wl,--gc-sections", *libs, "-lm", "-o", str(temp / "platform-test")], check=True)
+                        *map(str, platform_sources), "-Wl,--gc-sections", "-Wl,--wrap=getcwd",
+                        *libs, "-lm", "-o", str(temp / "platform-test")], check=True)
         env = os.environ.copy(); env["SDL_VIDEODRIVER"] = "dummy"
         subprocess.run([str(temp / "platform-test")], cwd=ROOT, env=env, check=True)
         pcm(temp / "music.ogg.pcm", 2107)
@@ -70,6 +72,12 @@ def main():
             (fixture / "doc").mkdir(); (fixture / "platform/ps2").mkdir(parents=True)
             shutil.copy2(PS2 / "README.md", fixture / "platform/ps2/README.md")
             shutil.copy2(PS2 / "deps.lock.json", fixture / "platform/ps2/deps.lock.json")
+            (fixture / "data/guns.json").write_text("{}\n")
+            (fixture / "graphics/font.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+            (fixture / "graphics/table_wood_round_terminal_wreck.png").write_bytes(b"full filename")
+            deep = fixture / "missions/A.cdogscpn/graphics/enemies/collection/direction/frames"
+            deep.mkdir(parents=True)
+            (deep / "body (old)-red.png").write_bytes(b"depth and punctuation")
             pcm(fixture / "sounds/tone.wav", 100)
             subprocess.run(["ffmpeg", "-v", "error", "-i", str(fixture / "sounds/tone.wav"),
                             str(fixture / "sounds/tone.ogg")], check=True)
@@ -78,7 +86,11 @@ def main():
             if tracker:
                 shutil.copy2(tracker, fixture / "music" / tracker.name)
             (fixture / "graphics/source.blend").write_text("unused source art")
-            elf = temp / "test.elf"; elf.write_bytes(b"\x7fELF" + bytes(64))
+            elf = temp / "test.elf"
+            header = bytearray(64); header[:6] = b"\x7fELF\x01\x01"
+            struct.pack_into("<H", header, 18, 8)
+            struct.pack_into("<I", header, 36, 0x20920020)
+            elf.write_bytes(header)
             package = temp / "package"
             stage.stage(fixture, elf, package, True, rfa)
             assert (package / "sounds/tone.ogg").stat().st_size == 0
@@ -93,6 +105,30 @@ def main():
             else:
                 raise AssertionError("source tree overwrite accepted")
             print("Audio staging and deterministic ZIP OK")
+            if importlib.util.find_spec("pycdlib"):
+                spec = importlib.util.spec_from_file_location("disc", PS2 / "disc.py")
+                disc = importlib.util.module_from_spec(spec); spec.loader.exec_module(disc)
+                disc.build_iso(package, temp / "a.iso")
+                disc.build_iso(package, temp / "b.iso")
+                assert disc.hash_file(temp / "a.iso") == disc.hash_file(temp / "b.iso")
+                try:
+                    disc.build_iso(package, package / "bad.iso")
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("ISO inside package accepted")
+                (package / "data/GUNS.JSON").write_text("case collision")
+                try:
+                    disc.package_entries(package)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("CDFS case collision accepted")
+                print("Bootable ISO, full Joliet names, depth, hashes, determinism and guards OK")
+            elif args.require_iso:
+                raise RuntimeError("Install platform/ps2/requirements-iso.txt for ISO regressions")
+            else:
+                print("ISO tests skipped (install platform/ps2/requirements-iso.txt to enable)")
 
 
 if __name__ == "__main__":

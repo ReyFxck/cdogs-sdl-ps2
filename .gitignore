@@ -119,5 +119,6 @@ out/
 .ps2dev/
 .ps2deps/
 !platform/ps2/include/
+/.ps2iso/
 *.elf
 *.map

@@ -35,6 +35,27 @@ Saídas: `out/ps2/cdogs-sdl.elf`, mapa de link em `out/ps2/cdogs-sdl.map` e
 `out/package/`, com o ELF e as pastas de assets lado a lado.
 O ZIP contém uma pasta `cdogs-sdl/` pronta para extração.
 
+Para gerar também a ISO de boot (recomendada no Android), instale a dependência
+do empacotador em um ambiente Python separado:
+
+```sh
+sudo apt-get install python3-venv
+python3 -m venv .ps2iso
+.ps2iso/bin/pip install -r platform/ps2/requirements-iso.txt
+.ps2iso/bin/python platform/ps2/disc.py \
+  --package out/package --output out/cdogs-sdl-ps2-silent.iso
+# Ou faça stage + ZIP + ISO em uma única chamada:
+# .ps2iso/bin/python platform/ps2/stage.py \
+#   --zip out/cdogs-sdl-ps2-silent.zip --iso out/cdogs-sdl-ps2-silent.iso
+```
+
+O empacotador escreve `SYSTEM.CNF` e `CDOGS.ELF` na raiz ISO9660 para o boot.
+Os assets ficam em Joliet, preservando maiúsculas/minúsculas, espaços e nomes
+maiores que 8.3. O CDFS do PS2SDK usado neste port lê essa árvore. O script
+verifica o ELF de boot e o hash de **cada arquivo** extraído da imagem, além
+dos limites de nomes/profundidade aceitos pelo driver. Timestamps da imagem
+são fixos (ou definidos por `SOURCE_DATE_EPOCH`) e não alteram os assets.
+
 `deps.lock.json` fixa os commits do SDL 2.32.10, PS2SDK (fontes de imports do IOP)
 e RFAuds2, e o SHA256 do bundle oficial ps2dev testado (EE GCC 15.2.0).
 O endereço do bundle oficial usa a release móvel `latest`: se ela mudar, o
@@ -95,6 +116,9 @@ python3 platform/ps2/build.py --audio RFAUDS2
 python3 platform/ps2/stage.py \
   --elf out/ps2-rfauds2/cdogs-sdl.elf --output out/package-rfauds2 \
   --audio --rfa-root "$RFAUDS2_ROOT" --zip out/cdogs-sdl-ps2-rfauds2.zip
+# Com o ambiente Python da seção anterior:
+.ps2iso/bin/python platform/ps2/disc.py --package out/package-rfauds2 \
+  --output out/cdogs-sdl-ps2-rfauds2.iso
 ```
 
 O IRX fica embutido no ELF; não é necessário copiar um módulo separado.
@@ -127,7 +151,28 @@ mais espaço em disco; o manifest informa o total convertido e hashes dos assets
 
 ## Boot e caminhos de arquivos
 
-Para o primeiro teste, use a variante silenciosa. Extraia o ZIP inteiro e
+Para o primeiro teste, use a variante silenciosa.
+
+### NetherSX2/AetherSX2 no Android
+
+Use `cdogs-sdl-ps2-silent.iso` **como imagem de jogo**, sem extrair a ISO e sem
+iniciar o ELF separado. Coloque a imagem na pasta de jogos autorizada pelo
+emulador, atualize a lista e abra-a como qualquer outro jogo. Os assets são
+lidos por `cdfs:/` de dentro da imagem; não dependem de acesso HostFS a pastas
+do Android. Para testar áudio depois, use a ISO RFAuds2 da mesma forma.
+
+O log de um teste anterior confirmou que o ELF iniciou PS2SDK/IOP, mas encerrou
+com `assets missing` antes do vídeo: `argv[0]` era um URI Android
+`host:content://...`, e o HostFS recusou os caminhos de assets. URIs SAF são
+nomes opacos do loader, não caminhos que o jogo ou a libc do PS2 possam abrir.
+O port agora evita normalizá-los como caminhos POSIX e procura o disco CDFS.
+A ISO também elimina a necessidade de manter `data/` e `graphics/` externas.
+**A imagem foi construída e validada, mas o boot no seu emulador ainda precisa
+ser confirmado.** Esta correção não comprova desempenho, controle ou SPU2.
+
+### ELF com HostFS no PC ou USB
+
+Extraia o ZIP inteiro e
 inicie o ELF **dentro da pasta extraída**, junto de `data/`, `graphics/`,
 `missions/`, `dogfights/`, `music/` e `sounds/`.
 
@@ -145,12 +190,19 @@ No USB, copie a pasta completa para `mass:/cdogs-sdl/` ou `mass0:/cdogs-sdl/`
 e inicie com um loader de homebrew que suporte esse dispositivo.
 
 O SDL2main do port inicializa IOP e drivers de filesystem. O jogo procura os
-assets, nesta ordem: `CDOGS_DATA_DIR`, pasta de `argv[0]`, diretório atual,
-`host:`, `mass:/cdogs-sdl` e `mass0:/cdogs-sdl`.
+assets, nesta ordem: `CDOGS_DATA_DIR`, pasta de `argv[0]` (ou `cdfs:/` para
+boot CD/DVD, `host:` para um URI SAF), diretório atual, `host:`, `cdfs:/`,
+`cdfs:/cdogs-sdl`, `mass:/cdogs-sdl` e `mass0:/cdogs-sdl`.
 Os caminhos `host:`, `mass:`, `mc0:` e `cdfs:` são preservados pelo resolvedor.
 A configuração é gravada em `config/` junto aos assets; para CD/DVD, usa
 `mc0:/CDOGS/`. Loaders que fornecem variáveis de ambiente podem definir
 `CDOGS_DATA_DIR` e `CDOGS_CONFIG_DIR`.
+As raízes são confirmadas pela leitura real de `data/guns.json` e
+`graphics/font.png`, não por `stat`. Um wrapper de tinydir local à plataforma
+usa o tipo vindo de `dread` para o CDFS: o `getstat` legado dessa revisão do
+PS2SDK retorna `1` para arquivos encontrados, impedindo a conversão de mode
+no IOMANX, e `0` para ausentes. Não foi necessário alterar SDK, SDL ou tinydir
+upstream. Os outros dispositivos continuam usando a classificação normal.
 
 Vídeo: composição software SDL em 320×240, seguida de upload de um framebuffer
 para o renderer PS2/gsKit. O driver acelerado PS2 não implementa o render target
@@ -176,6 +228,8 @@ Os testes locais da camada PS2 podem ser executados com SDL2 nativa:
 ```sh
 # Requer SDL2 development e pkg-config no host, além do checkout RFAuds2.
 python3 platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT"
+# Incluindo verificação de ISO, nomes longos, hashes e determinismo:
+# .ps2iso/bin/python platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT" --require-iso
 make -C "$RFAUDS2_ROOT" host-test
 ```
 
@@ -194,6 +248,8 @@ com música em memória.
 | SDL PS2 sem render-to-texture funcional | composição software + apresentação acelerada SDL |
 | PAD sem mapping adequado | mapping SDL_GameController dos índices reais do driver |
 | Caminhos POSIX/storefront no console | raízes por dispositivo e shim de descoberta Steam |
+| URI Android SAF em `argv[0]`/cwd e HostFS recusado | não tratar URI como caminho; imagem ISO com assets via CDFS |
+| `getstat` legado CDFS classifica arquivos incorretamente | leitura real para raiz e tipo `dread` no wrapper tinydir PS2 |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |
 | SDL_mixer/formatos incompatíveis com PCM | frontend silencioso ou RFAuds2 + conversão offline |

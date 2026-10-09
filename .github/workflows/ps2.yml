@@ -10,20 +10,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Host tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build python3 libsdl2-dev pkg-config ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build python3 python3-venv libsdl2-dev pkg-config ffmpeg
+          python3 -m venv .ps2iso
+          .ps2iso/bin/pip install -r platform/ps2/requirements-iso.txt
       - name: Locked ps2dev, SDL2 without audio, RFAuds2
         run: python3 platform/ps2/bootstrap.py --jobs 4
       - name: Host regressions
         run: |
           . .ps2deps/env.sh
-          python3 platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT"
+          .ps2iso/bin/python platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT" --require-iso
           make -C "$RFAUDS2_ROOT" host-test
       - name: Build both PS2 variants
         run: |
           . .ps2deps/env.sh
           python3 platform/ps2/build.py --audio OFF --jobs 4
           python3 platform/ps2/build.py --audio RFAUDS2 --jobs 4
-          python3 platform/ps2/stage.py --zip out/cdogs-sdl-ps2-silent.zip
+          .ps2iso/bin/python platform/ps2/stage.py --zip out/cdogs-sdl-ps2-silent.zip --iso out/cdogs-sdl-ps2-silent.iso
       - uses: actions/upload-artifact@v4
         with:
           name: cdogs-sdl-ps2
@@ -33,4 +37,5 @@ jobs:
             out/ps2-rfauds2/cdogs-sdl.elf
             out/ps2-rfauds2/cdogs-sdl.map
             out/cdogs-sdl-ps2-silent.zip
+            out/cdogs-sdl-ps2-silent.iso
           if-no-files-found: error

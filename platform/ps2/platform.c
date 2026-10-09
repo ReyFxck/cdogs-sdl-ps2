@@ -3,13 +3,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include "sys_config.h"
 
 static char dataRoot[CDOGS_PATH_MAX];
 static char configRoot[CDOGS_PATH_MAX];
 static char configPath[CDOGS_PATH_MAX];
+
+static bool IsContentPath(const char *path)
+{
+    /* Android SAF URIs are opaque loader names, not IOP filesystem paths.
+     * libcglue may already have collapsed content:// to content:/ in cwd.
+     */
+    if (!path) return false;
+    if (!strncmp(path, "host", 4))
+    {
+        const char *p = path + 4;
+        while (*p >= '0' && *p <= '9') ++p;
+        if (*p == ':') path = p + 1;
+    }
+    while (*path == '/') ++path;
+    return !strncmp(path, "content:/", 9);
+}
 
 static bool JoinPath(char *out, const char *base, const char *name)
 {
@@ -33,13 +48,14 @@ bool CDogsPS2IsAbsolutePath(const char *path)
 void CDogsPS2ResolvePath(const char *path, char *out)
 {
     char absolute[CDOGS_PATH_MAX];
-    if (!path || strlen(path) >= sizeof absolute) { out[0] = '\0'; return; }
+    if (!path || IsContentPath(path) || strlen(path) >= sizeof absolute)
+    { out[0] = '\0'; return; }
     if (CDogsPS2IsAbsolutePath(path))
         strcpy(absolute, path);
     else
     {
         char cwd[CDOGS_PATH_MAX];
-        if (!getcwd(cwd, sizeof cwd)) strcpy(cwd, "host:");
+        if (!getcwd(cwd, sizeof cwd) || IsContentPath(cwd)) strcpy(cwd, "host:");
         if (!JoinPath(absolute, cwd, path)) { out[0] = '\0'; return; }
     }
     for (char *p = absolute; *p; ++p) if (*p == '\\') *p = '/';
@@ -91,32 +107,52 @@ static bool TryRoot(const char *candidate)
     char root[CDOGS_PATH_MAX], path[CDOGS_PATH_MAX];
     CDogsPS2ResolvePath(candidate, root);
     if (!*root) return false;
-    struct stat st;
+    /* Test actual readability, not stat: legacy SDK cdfs getstat can return
+     * a non-POSIX file mode (and even success for a nonexistent filename).
+     */
     if (!JoinPath(path, root, "data/guns.json")) return false;
-    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return false;
+    FILE *f = fopen(path, "rb");
+    if (!f) return false;
+    const bool guns = fgetc(f) != EOF;
+    fclose(f);
+    if (!guns) return false;
     if (!JoinPath(path, root, "graphics/font.png")) return false;
-    if (stat(path, &st) != 0 || !S_ISREG(st.st_mode)) return false;
+    f = fopen(path, "rb");
+    if (!f) return false;
+    const bool font = fgetc(f) != EOF;
+    fclose(f);
+    if (!font) return false;
     return JoinPath(dataRoot, root, "");
 }
 
 bool CDogsPS2InitPaths(int argc, char **argv)
 {
+    dataRoot[0] = configRoot[0] = configPath[0] = '\0';
     const char *override = getenv("CDOGS_DATA_DIR");
     bool found = override && TryRoot(override);
     if (!found && argc > 0 && argv && argv[0])
     {
-        char exe[CDOGS_PATH_MAX];
-        snprintf(exe, sizeof exe, "%s", argv[0]);
-        char *slash = strrchr(exe, '/');
-        if (slash) { slash[1] = '\0'; found = TryRoot(exe); }
-        else
+        if (!strncmp(argv[0], "cdrom", 5) || !strncmp(argv[0], "cdfs:", 5))
+            found = TryRoot("cdfs:/");
+        else if (IsContentPath(argv[0]))
+            found = TryRoot("host:");
+        else if (strlen(argv[0]) < CDOGS_PATH_MAX)
         {
-            char *colon = strchr(exe, ':');
-            if (colon) { colon[1] = '\0'; found = TryRoot(exe); }
+            char exe[CDOGS_PATH_MAX];
+            strcpy(exe, argv[0]);
+            for (char *p = exe; *p; ++p) if (*p == '\\') *p = '/';
+            char *slash = strrchr(exe, '/');
+            if (slash) { slash[1] = '\0'; found = TryRoot(exe); }
+            else
+            {
+                char *colon = strchr(exe, ':');
+                if (colon) { colon[1] = '\0'; found = TryRoot(exe); }
+            }
         }
     }
     if (!found) found = TryRoot(".");
-    const char *fallback[] = {"host:", "mass:/cdogs-sdl", "mass0:/cdogs-sdl", NULL};
+    const char *fallback[] = {"host:", "cdfs:/", "cdfs:/cdogs-sdl",
+        "mass:/cdogs-sdl", "mass0:/cdogs-sdl", NULL};
     for (int i = 0; !found && fallback[i]; ++i) found = TryRoot(fallback[i]);
     if (!found) return false;
     override = getenv("CDOGS_CONFIG_DIR");
