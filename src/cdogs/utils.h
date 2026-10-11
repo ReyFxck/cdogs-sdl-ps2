@@ -88,10 +88,19 @@ extern bool gFalse;
 
 // Even though malloc(0) may return NULL, we don't account for it for
 // simplicity and to allow code linters to work better
+#ifdef CDOGS_PS2
+void CDogsPS2AllocationFailed(
+	const char *operation, size_t bytes, const char *file, int line);
+#define CDOGS_ALLOC_FAILURE(_func, _size)                                     \
+	CDogsPS2AllocationFailed(_func, (_size), __FILE__, __LINE__)
+#else
+#define CDOGS_ALLOC_FAILURE(_func, _size) ((void)0)
+#endif
 #define _CCHECKALLOC(_func, _var, _size)                                      \
 	{                                                                         \
 		if (_var == NULL)                                                     \
 		{                                                                     \
+			CDOGS_ALLOC_FAILURE(_func, _size);                              \
 			exit(1);                                                          \
 		}                                                                     \
 	}

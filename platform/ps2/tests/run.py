@@ -44,7 +44,7 @@ def main():
                   "-Wno-unused-parameter", "-ffunction-sections", "-fdata-sections", "-DCDOGS_PS2",
                   "-I" + str(PS2 / "include"), "-I" + str(temp), "-I" + str(ROOT / "src"),
                   "-I" + str(ROOT / "src/cdogs"), *cflags]
-        platform_sources = [PS2 / "tests/platform_test.c", PS2 / "platform.c", PS2 / "window_context.c",
+        platform_sources = [PS2 / "tests/platform_test.c", PS2 / "platform.c", PS2 / "memory.c", PS2 / "window_context.c",
                             PS2 / "posix_paths.c", ROOT / "src/cdogs/c_array.c", ROOT / "src/cdogs/vector.c",
                             ROOT / "src/cdogs/color.c", ROOT / "src/cdogs/texture.c",
                             ROOT / "src/cdogs/mathc/mathc.c"]
@@ -60,7 +60,7 @@ def main():
                         "-Wl,--gc-sections", "-Wl,--wrap=SDL_RWFromFile", "-Wl,--export-dynamic",
                         *libs, "-ldl", "-lm", "-o", str(temp / "rwops-test")], check=True)
         subprocess.run([str(temp / "rwops-test"), str(ROOT / "graphics/font.png")], check=True)
-        graphics_sources = [PS2 / "tests/graphics_memory_test.c", PS2 / "platform.c", PS2 / "pic_texture.c",
+        graphics_sources = [PS2 / "tests/graphics_memory_test.c", PS2 / "platform.c", PS2 / "memory.c", PS2 / "pic_texture.c",
                             PS2 / "graphics_pack.c",
                             *[ROOT / "src/cdogs" / name for name in
                               ("pic.c", "pic_manager.c", "font.c", "utils.c", "cpic.c", "blit.c",

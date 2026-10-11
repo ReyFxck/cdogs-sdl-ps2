@@ -161,6 +161,7 @@ static void Render(void)
         struct vec2i logical = {320, 240};
         assert(WindowContextCreate(&wc, dim, SDL_WINDOW_HIDDEN, "PS2 host test", NULL, logical));
         assert(SDL_RenderTargetSupported(wc.renderer));
+        assert(wc.final == NULL); /* The GS upload surface is the render target. */
         Uint32 format;
         assert(SDL_QueryTexture(wc.presentTexture, &format, NULL, NULL, NULL) == 0);
         assert(format == SDL_PIXELFORMAT_ABGR8888);
@@ -192,6 +193,20 @@ static void Render(void)
             assert(raw[0] == r && raw[1] == g && raw[2] == b && raw[3] == a);
 #endif
         }
+        /* GrafxDrawBackground switches to a target texture and back. The
+         * following frame must composite it onto the upload surface. */
+        SDL_Texture *background = WindowContextCreateTexture(&wc,
+            SDL_TEXTUREACCESS_TARGET, logical, SDL_BLENDMODE_NONE, 255, true);
+        assert(background);
+        assert(SDL_SetRenderTarget(wc.renderer, background) == 0);
+        assert(SDL_SetRenderDrawColor(wc.renderer, 10, 120, 180, 255) == 0);
+        assert(SDL_RenderClear(wc.renderer) == 0);
+        assert(SDL_SetRenderTarget(wc.renderer, NULL) == 0);
+        WindowContextPreRender(&wc);
+        WindowContextPostRender(&wc);
+        pixel = *(Uint32 *)wc.framebuffer->pixels;
+        SDL_GetRGBA(pixel, wc.framebuffer->format, &r, &g, &b, &a);
+        assert(r == 10 && g == 120 && b == 180 && a == 255);
         WindowContextDestroy(&wc);
         assert(!wc.window && !wc.renderer && !wc.framebuffer);
     }

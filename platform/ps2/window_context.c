@@ -100,29 +100,9 @@ bool WindowContextInitTextures(
 	CArrayInit(&wc->texturesBkg, sizeof(SDL_Texture *));
 	CArrayInit(&wc->textures, sizeof(SDL_Texture *));
 
-	// Init final presentation texture
-	if (wc->final != NULL)
-	{
-		SDL_DestroyTexture(wc->final);
-		wc->final = NULL;
-	}
-	wc->final = SDL_CreateTexture(
-		wc->renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_TARGET,
-		rendererLogicalSize.x, rendererLogicalSize.y);
-	if (wc->final == NULL)
-	{
-		LOG(LM_GFX, LL_ERROR, "cannot create final texture: %s",
-			SDL_GetError());
-		return false;
-	}
-	if (SDL_SetTextureBlendMode(wc->final, SDL_BLENDMODE_NONE) != 0)
-	{
-		LOG(LM_GFX, LL_ERROR, "cannot set final blend mode: %s",
-			SDL_GetError());
-		SDL_DestroyTexture(wc->final);
-		wc->final = NULL;
-		return false;
-	}
+	// The software renderer's default target is already the ABGR surface that
+	// the GS presenter uploads. Drawing into another ARGB target and copying it
+	// here converted every pixel a second time on the EE each frame.
 
 	if (SDL_RenderSetLogicalSize(
 			wc->renderer, rendererLogicalSize.x, rendererLogicalSize.y) != 0)
@@ -145,11 +125,6 @@ void WindowContextDestroy(WindowContext *wc)
 }
 void WindowContextDestroyTextures(WindowContext *wc)
 {
-	if (wc->final != NULL)
-	{
-		SDL_DestroyTexture(wc->final);
-		wc->final = NULL;
-	}
 	CA_FOREACH(SDL_Texture *, t, wc->texturesBkg)
 	SDL_DestroyTexture(*t);
 	CA_FOREACH_END()
@@ -184,9 +159,9 @@ SDL_Texture *WindowContextCreateTexture(
 
 void WindowContextPreRender(WindowContext *wc)
 {
-	if (SDL_SetRenderTarget(wc->renderer, wc->final) != 0)
+	if (SDL_SetRenderTarget(wc->renderer, NULL) != 0)
 	{
-		LOG(LM_GFX, LL_ERROR, "Failed to set final target: %s",
+		LOG(LM_GFX, LL_ERROR, "Failed to set framebuffer target: %s",
 			SDL_GetError());
 		return;
 	}
@@ -213,9 +188,9 @@ void WindowContextPreRender(WindowContext *wc)
 void WindowContextPostRender(WindowContext *wc)
 {
 	const Uint32 start = SDL_GetTicks();
-	if (SDL_SetRenderTarget(wc->renderer, wc->final) != 0)
+	if (SDL_SetRenderTarget(wc->renderer, NULL) != 0)
 	{
-		LOG(LM_GFX, LL_ERROR, "Failed to set final target: %s",
+		LOG(LM_GFX, LL_ERROR, "Failed to set framebuffer target: %s",
 			SDL_GetError());
 	}
 
@@ -225,10 +200,6 @@ void WindowContextPostRender(WindowContext *wc)
 		SDL_FLIP_NONE);
 	CA_FOREACH_END()
 
-	SDL_SetRenderTarget(wc->renderer, NULL);
-
-	SDL_RenderSetLogicalSize(wc->renderer, 0, 0);
-	SDL_RenderCopy(wc->renderer, wc->final, NULL, NULL);
 	SDL_RenderPresent(wc->renderer);
 	const Uint32 composed = SDL_GetTicks();
 	if (SDL_UpdateTexture(wc->presentTexture, NULL,

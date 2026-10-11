@@ -66,6 +66,7 @@ typedef struct
 	GameMode lastGameMode;
 	bool wasClient;
 #ifdef CDOGS_PS2
+	bool bgReady;
 	unsigned bgTicksPending;
 	unsigned bgDrawCountdown;
 	bool firstBgDraw;
@@ -109,13 +110,25 @@ GameLoopData *MainMenu(GraphicsDevice *graphics, LoopRunner *l)
 static void GenerateLiveBackground(MainMenuData *data)
 {
 #ifdef CDOGS_PS2
+	const Uint32 started = SDL_GetTicks();
 	CDogsPS2LogMemory("menu background start");
+	if (data->bgReady)
+	{
+		DrawBufferTerminate(&data->buffer);
+		data->bgReady = false;
+	}
 #endif
 	MissionOptionsTerminate(&gMission);
 	CampaignTerminate(&gCampaign);
+#ifdef CDOGS_PS2
+	LOG(LM_MAIN, LL_INFO, "PS2: menu cleanup %u ms", SDL_GetTicks() - started);
+#endif
 
 	CampaignSettingInit(&gCampaign.Setting);
 	SetupQuickPlayCampaign(&gCampaign.Setting, true);
+#ifdef CDOGS_PS2
+	LOG(LM_MAIN, LL_INFO, "PS2: menu campaign %u ms", SDL_GetTicks() - started);
+#endif
 	CampaignAndMissionSetup(&gCampaign, &gMission);
 	GameEventsInit(&gGameEvents);
 	gCampaign.MissionIndex = 0;
@@ -123,6 +136,9 @@ static void GenerateLiveBackground(MainMenuData *data)
 	MapBuild(
 		&gMap, gMission.missionData, true, gMission.index, GAME_MODE_NORMAL,
 		&gCampaign.Setting.characters);
+#ifdef CDOGS_PS2
+	LOG(LM_MAIN, LL_INFO, "PS2: menu map %u ms", SDL_GetTicks() - started);
+#endif
 
 	// Add AI player
 	GameEvent e = GameEventNew(GAME_EVENT_PLAYER_DATA);
@@ -148,6 +164,9 @@ static void GenerateLiveBackground(MainMenuData *data)
 	data->bgUpdateMs = data->bgDrawMs = 0;
 #endif
 	DrawBufferInit(&data->buffer, svec2i(X_TILES, Y_TILES), data->graphics);
+#ifdef CDOGS_PS2
+	data->bgReady = true;
+#endif
 	InitializeBadGuys();
 	CreateEnemies();
 	MapMarkAllAsVisited(&gMap);
@@ -157,9 +176,29 @@ static void GenerateLiveBackground(MainMenuData *data)
 	LOSSetAllVisible(&data->rData.map->LOS);
 #endif
 #ifdef CDOGS_PS2
+	LOG(LM_MAIN, LL_INFO, "PS2: menu background total %u ms", SDL_GetTicks() - started);
 	CDogsPS2LogMemory("menu background ready");
 #endif
 }
+#ifdef CDOGS_PS2
+// The animated menu owns a map, actors and a campaign of its own. Return
+// their memory before loading a playable campaign, while the menu is hidden.
+static void MainMenuReleaseBackground(MainMenuData *data)
+{
+	if (!data->bgReady)
+	{
+		return;
+	}
+	DrawBufferTerminate(&data->buffer);
+	memset(&data->buffer, 0, sizeof data->buffer);
+	MissionOptionsTerminate(&gMission);
+	MapTerminate(&gMap);
+	memset(&gMap, 0, sizeof gMap);
+	CampaignTerminate(&gCampaign);
+	data->bgReady = false;
+	CDogsPS2LogMemory("menu battle released");
+}
+#endif
 static void OnGfxChange(void *data, const bool resetBg)
 {
 	MainMenuData *mData = data;
@@ -194,6 +233,12 @@ static void MainMenuResize(MainMenuData *data)
 static void MainMenuTerminate(GameLoopData *data)
 {
 	MainMenuData *mData = data->Data;
+#ifdef CDOGS_PS2
+	if (!gCampaign.IsLoaded)
+	{
+		MainMenuReleaseBackground(mData);
+	}
+#endif
 
 	MenuSystemTerminate(&mData->ms);
 	UnloadCredits(&mData->creditsDisplayer);
@@ -255,6 +300,13 @@ static void MainMenuOnExit(GameLoopData *data)
 	MainMenuData *mData = data->Data;
 #ifdef CDOGS_PS2
 	CDogsPS2TrackMenu(false);
+	// Record this before releasing the decorative campaign.
+	mData->lastGameMode = gCampaign.Entry.Mode;
+	mData->wasClient = gCampaign.IsClient;
+	if (!gCampaign.IsLoaded)
+	{
+		MainMenuReleaseBackground(mData);
+	}
 #endif
 
 	// Reset player datas
@@ -263,8 +315,11 @@ static void MainMenuOnExit(GameLoopData *data)
 	// Initialise game events; we need this for init as well as the game
 	GameEventsInit(&gGameEvents);
 
+
+#ifndef CDOGS_PS2
 	mData->lastGameMode = gCampaign.Entry.Mode;
 	mData->wasClient = gCampaign.IsClient;
+#endif
 }
 static GameLoopResult MainMenuUpdate(GameLoopData *data, LoopRunner *l)
 {

@@ -21,3 +21,12 @@ void CDogsPS2LogMemory(const char *stage)
     (void)stage; /* Host tests do not have the EE memory map. */
 #endif
 }
+
+void CDogsPS2AllocationFailed(
+    const char *operation, const size_t bytes, const char *file, const int line)
+{
+    printf("PS2: allocation failed: %s %u bytes at %s:%d\n",
+        operation, (unsigned)bytes, file, line);
+    CDogsPS2LogMemory("allocation failed");
+    fflush(stdout);
+}

@@ -268,7 +268,15 @@ void SetupQuickPlayCampaign(CampaignSetting *setting, const bool isBg)
 	CSTRDUP(setting->Description, "");
 	setting->RandomPickups = true;
 	setting->DoorOpenTicks = FPS_FRAMELIMIT;
-	for (int i = 0; i < NUM_MISSIONS; i++)
+	// The PS2 menu uses only the first mission for its animated background.
+	// Building the other two tile sets on the EE delays every return to menu.
+	const int missionCount =
+#ifdef CDOGS_PS2
+		isBg ? 1 : NUM_MISSIONS;
+#else
+		NUM_MISSIONS;
+#endif
+	for (int i = 0; i < missionCount; i++)
 	{
 		AddMission(
 			&setting->Missions, &gPicManager, &setting->characters, i, isBg);

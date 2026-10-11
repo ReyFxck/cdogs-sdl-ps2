@@ -72,6 +72,9 @@
 #include "loading_screens.h"
 #include "prep.h"
 #include "screens_end.h"
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
 
 static void PlayerSpecialCommands(TActor *actor, const int cmd)
 {
@@ -152,6 +155,12 @@ static void RunGameTerminate(GameLoopData *data)
 static void RunGameOnEnter(GameLoopData *data)
 {
 	RunGameData *rData = data->Data;
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("game entry");
+	LOG(LM_MAIN, LL_INFO, "PS2: game map %dx%d mode=%d",
+		rData->m->missionData->Size.x, rData->m->missionData->Size.y,
+		rData->co->Entry.Mode);
+#endif
 
 	RunGameReset(rData);
 
@@ -160,6 +169,9 @@ static void RunGameOnEnter(GameLoopData *data)
 		rData->map, rData->m->missionData, !rData->co->IsClient,
 		rData->m->index, rData->co->Entry.Mode,
 		&rData->co->Setting.characters);
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("game map built");
+#endif
 
 	// Seed random if PVP mode (otherwise players will always spawn in same
 	// position)
@@ -203,6 +215,9 @@ static void RunGameOnEnter(GameLoopData *data)
 			CreateEnemies();
 		}
 	}
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("game actors placed");
+#endif
 
 	CameraInit(&rData->Camera);
 	// If there are no players, show the full map before starting
@@ -228,6 +243,9 @@ static void RunGameOnEnter(GameLoopData *data)
 	PauseMenuInit(
 		&rData->pm, &gEventHandlers, &gGraphicsDevice, OnGfxChangeCallback,
 		rData);
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("game camera and pause menu ready");
+#endif
 
 	rData->m->state = MISSION_STATE_WAITING;
 	rData->m->isDone = false;
@@ -261,6 +279,9 @@ static void RunGameOnEnter(GameLoopData *data)
 	}
 	e.u.SetMessage.Ticks = 3000;
 	GameEventsEnqueue(&gGameEvents, e);
+#ifdef CDOGS_PS2
+	LOG(LM_MAIN, LL_INFO, "PS2: game entry complete");
+#endif
 }
 static void RunGameOnExit(GameLoopData *data)
 {
@@ -665,6 +686,16 @@ static void CheckMissionCompletion(const struct MissionOptions *mo)
 static void RunGameDraw(GameLoopData *data)
 {
 	RunGameData *rData = data->Data;
+#ifdef CDOGS_PS2
+	static bool firstGameDraw = true;
+	static Uint32 drawMs;
+	static unsigned drawFrames;
+	const Uint32 drawStart = SDL_GetTicks();
+	if (firstGameDraw)
+	{
+		CDogsPS2LogMemory("game first draw");
+	}
+#endif
 
 	// Draw game layer
 	BlitClearBuf(&gGraphicsDevice);
@@ -696,6 +727,21 @@ static void RunGameDraw(GameLoopData *data)
 		}
 		BlitUpdateFromBuf(&gGraphicsDevice, gGraphicsDevice.hud2);
 	}
+#ifdef CDOGS_PS2
+	const Uint32 elapsed = SDL_GetTicks() - drawStart;
+	if (firstGameDraw)
+	{
+		LOG(LM_MAIN, LL_INFO, "PS2: first game draw %u ms", elapsed);
+		firstGameDraw = false;
+	}
+	drawMs += elapsed;
+	if (++drawFrames == 30)
+	{
+		LOG(LM_MAIN, LL_INFO, "PS2: game draw avg=%u ms / 30 draws",
+			drawMs / drawFrames);
+		drawMs = drawFrames = 0;
+	}
+#endif
 }
 
 void GameInit(

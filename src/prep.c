@@ -81,6 +81,9 @@
 #include "namegen.h"
 #include "password.h"
 #include "player_select_menus.h"
+#ifdef CDOGS_PS2
+#include "ps2_platform.h"
+#endif
 
 typedef struct
 {
@@ -681,12 +684,18 @@ static void GameOptionsTerminate(GameLoopData *data)
 static void GameOptionsOnEnter(GameLoopData *data)
 {
 	GameOptionsData *gData = data->Data;
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("campaign options entry");
+#endif
 
 	if (!gCampaign.IsQuit)
 	{
 		MissionOptionsTerminate(&gMission);
 		CampaignAndMissionSetup(&gCampaign, &gMission);
 	}
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("campaign mission prepared");
+#endif
 
 	gData->ms.current = gData->ms.root;
 	// Select "Done"
@@ -830,6 +839,9 @@ bail:
 		LoopRunnerPop(l);
 		return UPDATE_RESULT_OK;
 	}
+#ifdef CDOGS_PS2
+	CDogsPS2LogMemory("campaign starting game");
+#endif
 	LoopRunnerPush(
 		l, ScreenLoading(
 			   "Starting game...", true, RunGame(&gCampaign, &gMission, &gMap),

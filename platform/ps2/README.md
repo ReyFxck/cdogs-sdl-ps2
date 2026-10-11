@@ -11,19 +11,21 @@ Há duas variantes:
 | `OFF` (padrão) | desativada | pacote menor, sem arquivos de áudio |
 | `RFAUDS2` | PCM estéreo S16, 48 kHz, RFAuds2 no EE/IOP | conversão no PC com FFmpeg |
 
-**As variantes silenciosa e RFAuds2 compilaram com PS2SDK; o NetherSX2 chegou
-ao menu animado na ISO silenciosa v6.** A taxa relatada foi de cerca de 8 FPS,
-seguida por reinício do emulador. O log não mostra um trap do jogo; não sabemos
-ainda se o reinício foi causado pelo jogo ou por uma ação no emulador. O SPU2
-não foi testado. Não há BIOS nem emulador neste ambiente de build.
+**As variantes silenciosa e RFAuds2 compilam com PS2SDK; a ISO silenciosa v7
+chegou ao menu animado no NetherSX2.** O menu foi relatado com cerca de 8 FPS
+e, depois de selecionar uma campanha, o emulador voltou à BIOS. O log mostra
+um reinício depois de preparar jogadores e mapa, sem identificar ainda se foi
+falta de memória ou falha em outra fase do jogo. Não há BIOS/emulador neste
+ambiente de build, e o SPU2 ainda não foi testado.
 O teste da v3 passou a abrir os PNGs, mas esgotou a RAM durante a carga gráfica
 e o jogo encerrou, retornando à BIOS. Esta revisão libera as imagens temporárias
 e adiciona diagnóstico do heap EE. A v4 exibiu as telas de carregamento, mas
 travou ao gerar a batalha de fundo do menu depois de falhas de leitura CDFS.
 Esta revisão corrige limites/enumeração do driver, elimina pixels duplicados
-na composição software. A v5 usou um fundo estático como precaução; esta revisão
-restaurou a batalha animada original do menu no PS2, mantendo as correções de RAM
-e filesystem. A revisão seguinte reduz o custo da animação e da carga gráfica.
+na composição software. A v5 usou um fundo estático como precaução; as revisões
+seguintes restauraram a batalha animada original e reduziram a carga gráfica.
+Esta revisão remove uma passagem de composição por quadro, descarta recursos
+decorativos antes da campanha e limita o fundo do menu a uma missão gerada.
 
 ## Build reproduzível no Linux
 
@@ -253,10 +255,22 @@ cores naturais escurecidas, evitando o tom aleatório e às vezes rosa do upstre
 O log indica começo/fim do primeiro desenho do menu, primeira apresentação e
 tempos médios do compositor, upload e GS a cada 30 quadros. Isso ajuda a
 identificar gargalos ou um possível encerramento antes do primeiro frame.
-Dados obrigatórios ausentes geram uma mensagem e
-saída controlada, em vez de entrar na geração aleatória com arrays vazios.
-**A revisão com estas otimizações ainda precisa de teste no emulador.** Não se
-comprova o FPS, controle em gameplay ou SPU2.
+Dados obrigatórios ausentes geram uma mensagem e saída controlada, em vez de
+entrar na geração aleatória com arrays vazios.
+
+O log da v7 mostrou ~43 ms por quadro somente na composição final do menu,
+~23 ms em cada desenho da batalha e reinício depois de `CampaignSeedRandom` e
+atualização do jogador. Na revisão atual, a SDL software compõe diretamente
+no framebuffer ABGR enviado ao GS, eliminando a textura final ARGB e sua
+cópia/conversão de pixels. O teste nativo verifica cores e a troca entre o
+alvo do fundo e o framebuffer. Ao sair do menu, o port libera mapa, atores,
+campanha e DrawBuffer decorativos para dar espaço à campanha jogável; a
+animação do menu continua ativa enquanto ele aparece. A geração decorativa
+prepara só a missão que aparece no fundo, mantendo as três missões do Quick
+Play jogável. O ELF registra tempos das fases do menu, memória na entrada
+da campanha e nos passos de criação do jogo, duração do primeiro desenho e
+falhas de alocação antes da saída. **FPS e correção da volta à BIOS precisam
+ser confirmados no NetherSX2/PS2 com esta ISO.**
 
 ### ELF com HostFS no PC ou USB
 
@@ -324,7 +338,7 @@ python3 platform/ps2/tests/run.py --rfa-root "$RFAUDS2_ROOT"
 make -C "$RFAUDS2_ROOT" host-test
 ```
 
-Pendências reais: medir velocidade/cor e investigar o reinício após o menu no NetherSX2/PS2;
+Pendências reais: medir velocidade/cor e verificar se a campanha avança com a nova ISO no NetherSX2/PS2;
 confirmar reprodução/underruns da RFAuds2 no SPU2; aprimorar throughput do
 renderer caso necessário. Rede/LAN, editor/OpenGL e decodificação comprimida
 no PS2 ficam fora deste milestone. Não se promete suporte aos imports Wolf3D
@@ -347,6 +361,9 @@ com música em memória.
 | Cópia de pixels em Pic.Data e textura SDL consome RAM | buffer compartilhado apenas no compositor software fixado, regressão em 16 MiB |
 | Milhares de PNGs separados e recálculo de estilos a cada imagem | pack sequencial gerado no stage e cálculo único ao fim do carregamento PS2 |
 | Fundo animado pesa em cada frame e pode ficar rosa | simulação/desenho da batalha a cada três frames, tint escuro neutro apenas no PS2 |
+| Quadro software era copiado e convertido ARGB→ABGR antes do GS | composição direta no framebuffer ABGR; regressão nativa de cores/fundo |
+| Menu mantinha seu mapa e seus atores durante a carga da campanha | liberação desses recursos na saída do menu e diagnóstico do heap nas fases do jogo |
+| Quick Play do fundo preparava três missões para mostrar uma | apenas a missão decorativa é gerada no PS2; Quick Play jogável mantém as três |
 | Menu gera combate mesmo com assets incompletos | validação de dados obrigatórios antes do menu, preservando a batalha animada |
 | `dirname`/`basename` ausentes na libc | helpers locais, incluindo raízes de dispositivos |
 | GCC n32/R5900 falha com structs de campos `double` | tipo `cdogs_real_t` é float só no PS2, double no desktop |
